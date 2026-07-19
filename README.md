@@ -1,6 +1,6 @@
 # Cloud Compliance Guardian
 
-A layered AWS compliance system built around a **Preventive → Detective → Corrective** control model, with a live dashboard on top. Instead of just reporting on non-compliant resources, this system stops bad configuration before it happens, continuously watches for anything that slips through, and automatically fixes what it finds — no human in the loop.
+A layered AWS compliance system built around a **Preventive -> Detective -> Corrective** control model, with a live dashboard on top. Instead of just reporting on non-compliant resources, this system stops bad configuration before it happens, continuously watches for anything that slips through, and automatically fixes what it finds.
 
 ## Why this project exists
 
@@ -14,28 +14,28 @@ Most compliance-checker projects stop at detection: a script runs, prints a repo
 
 ```
                     ┌─────────────────────────┐
-                    │   React Dashboard (UI)   │
+                    │   React Dashboard (UI)  │
                     └────────────┬────────────┘
                                  │
                     ┌────────────▼────────────┐
-                    │   FastAPI Backend (API)  │
+                    │   FastAPI Backend (API) │
                     └────────────┬────────────┘
                                  │
         ┌────────────────────────┼────────────────────────┐
-        │                        │                         │
-┌───────▼────────┐    ┌──────────▼──────────┐   ┌──────────▼──────────┐
-│   Preventive    │    │      Detective       │   │      Corrective       │
+        │                        │                        │
+┌─────────────────┐    ┌──────────────────────┐   ┌──────────────────────┐
+│   Preventive    │    │      Detective       │   │      Corrective      │
 │   SCP Policy    │    │  AWS Config + Boto3  │   │   SSM Automation     │
-│                 │    │  compliance checks   │   │      runbooks         │
-│ Blocks resource │    │                       │   │                        │
-│ creation w/o    │───▶│ Flags non-compliant  │──▶│ Auto-remediates flagged│
-│ required tags   │    │ resources             │   │ violations             │
-└─────────────────┘    └───────────────────────┘   └────────────────────────┘
+│                 │    │  compliance checks   │   │      runbooks        │
+│ Blocks resource │    │                      │   │                      │
+│ creation w/o    │───▶│ Flags non-compliant  │-> │ Auto-remediates      │
+│ required tags   │    │ resources            │   │flagged violations    │
+└─────────────────┘    └──────────────────────┘   └──────────────────────┘
 
                     ┌─────────────────────────┐
-                    │  Terraform (deploys all  │
-                    │  of the above to ECS     │
-                    │  Fargate)                │
+                    │  Terraform (deploys all │
+                    │  of the above to ECS    │
+                    │  Fargate)               │
                     └─────────────────────────┘
 ```
 
