@@ -87,6 +87,18 @@ repos:
         args: [--quiet, --compact, --skip-path, frontend/]
 
   # ---------------------------------------------------------------------
+  # GitHub Actions workflow linting.
+  # Plain YAML validation is NOT enough: the `${{ }}` expression language is a
+  # separate parser that only runs on GitHub. A workflow can be perfectly valid
+  # YAML and still fail the entire run in 0s. actionlint checks the expression
+  # syntax, action input names, and shell fragments locally.
+  # ---------------------------------------------------------------------
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.12
+    hooks:
+      - id: actionlint
+
+  # ---------------------------------------------------------------------
   # Conventional commit messages.
   # Enforces `feat(detective): add S3 public access check` style.
   # Cosmetic on its own, but it makes the git log on a public portfolio repo

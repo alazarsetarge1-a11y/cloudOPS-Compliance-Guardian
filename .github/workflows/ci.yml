@@ -237,7 +237,10 @@ jobs:
     steps:
       - name: Verify all jobs passed
         run: |
-          results='${{ join(needs.*.result, " ") }}'
+          # Note: GitHub Actions expressions accept ONLY single quotes for
+          # string literals — join(..., " ") is a parse error that fails the
+          # whole run in 0s. Hence single quotes inside, double quotes outside.
+          results="${{ join(needs.*.result, ' ') }}"
           echo "Job results: $results"
           for r in $results; do
             if [ "$r" != "success" ] && [ "$r" != "skipped" ]; then
