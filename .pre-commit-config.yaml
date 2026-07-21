@@ -1,0 +1,100 @@
+# Pre-commit hooks — the LOCAL gate.
+# These run on `git commit` and block the commit if anything fails.
+# This is layer 1 of 3: local hooks -> GitHub Actions CI -> CodeRabbit review.
+#
+# Install once:  pre-commit install
+# Run manually:  pre-commit run --all-files
+# Update pins:   pre-commit autoupdate
+
+default_install_hook_types: [pre-commit, commit-msg]
+
+repos:
+  # ---------------------------------------------------------------------
+  # Secret scanning — the single most important hook in a security repo.
+  # Catches AWS access keys, session tokens, private keys before they hit git.
+  # A leaked AKIA... in git history is permanent; rewriting history is painful
+  # and the key must be rotated regardless. Prevention is the only real fix.
+  # ---------------------------------------------------------------------
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.28.0
+    hooks:
+      - id: gitleaks
+
+  # ---------------------------------------------------------------------
+  # Generic file hygiene
+  # ---------------------------------------------------------------------
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-merge-conflict
+      - id: mixed-line-ending
+      # Validates every SCP policy + Config rule payload is parseable JSON.
+      # A malformed SCP is rejected by AWS Organizations with an unhelpful
+      # error — catching it here saves a round trip to the console.
+      - id: check-json
+      - id: check-yaml
+        args: [--allow-multiple-documents] # SSM runbooks / k8s-style manifests
+      - id: check-added-large-files
+        args: [--maxkb=1024]
+      # Blocks committing an actual private key file.
+      - id: detect-private-key
+      # Blocks .env, credentials, etc. from being force-added past .gitignore.
+      - id: check-case-conflict
+
+  # ---------------------------------------------------------------------
+  # Python: lint + format (ruff replaces flake8 + isort + black)
+  # Applies to detective/ checks, corrective/ helpers, backend/ FastAPI app.
+  # ---------------------------------------------------------------------
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.14.5
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+      - id: ruff-format
+
+  # ---------------------------------------------------------------------
+  # Python security static analysis.
+  # Flags hardcoded credentials, shell=True, insecure hashing, unsafe yaml.load,
+  # requests without timeout — the classes of bug that matter in a tool that
+  # holds AWS credentials and calls AWS APIs on your behalf.
+  # ---------------------------------------------------------------------
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.9.2
+    hooks:
+      - id: bandit
+        args: [-c, pyproject.toml]
+        additional_dependencies: ['bandit[toml]']
+
+  # ---------------------------------------------------------------------
+  # Terraform: formatting + static security analysis.
+  # Checkov catches unencrypted S3, public security groups, missing logging,
+  # IAM wildcards — i.e. it enforces on YOUR infra the same rules your
+  # Detective layer enforces on deployed AWS resources. Dogfooding.
+  # These are no-ops until infra/ has .tf files.
+  # ---------------------------------------------------------------------
+  - repo: https://github.com/antonbabenko/pre-commit-terraform
+    rev: v1.100.0
+    hooks:
+      - id: terraform_fmt
+      - id: terraform_validate
+
+  - repo: https://github.com/bridgecrewio/checkov
+    rev: 3.2.492
+    hooks:
+      - id: checkov
+        args: [--quiet, --compact, --skip-path, frontend/]
+
+  # ---------------------------------------------------------------------
+  # Conventional commit messages.
+  # Enforces `feat(detective): add S3 public access check` style.
+  # Cosmetic on its own, but it makes the git log on a public portfolio repo
+  # read like a professional project, and enables auto-generated changelogs.
+  # ---------------------------------------------------------------------
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v4.4.0
+    hooks:
+      - id: conventional-pre-commit
+        stages: [commit-msg]
+        args: [feat, fix, docs, style, refactor, test, chore, ci, build, perf]

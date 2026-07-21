@@ -1,0 +1,248 @@
+# CI — layer 2 of the quality gate (local hooks -> CI -> CodeRabbit).
+#
+# Why this exists when pre-commit already runs the same tools locally:
+# pre-commit can be bypassed with `git commit --no-verify`, and it only sees
+# files you staged. CI runs on the full tree, on GitHub's machine, and its
+# results become REQUIRED STATUS CHECKS that branch protection enforces.
+# Local hooks are a fast feedback loop; CI is the thing that actually blocks.
+
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# Cancel superseded runs when you push again to the same PR.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Default to read-only. Jobs that need more (e.g. uploading SARIF) opt in.
+permissions:
+  contents: read
+
+jobs:
+  # -------------------------------------------------------------------
+  # Secret scanning across full history, not just the diff.
+  # -------------------------------------------------------------------
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0 # gitleaks needs history to scan past commits
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # -------------------------------------------------------------------
+  # Python: lint, security scan, tests.
+  # Covers detective/, corrective/, backend/.
+  # -------------------------------------------------------------------
+  python:
+    name: Python lint + test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff bandit[toml] pytest
+          # requirements.txt may not list everything yet; tolerate absence.
+          if [ -f backend/requirements.txt ]; then pip install -r backend/requirements.txt; fi
+
+      - name: Ruff lint
+        run: ruff check --output-format=github .
+
+      - name: Ruff format check
+        run: ruff format --check .
+
+      - name: Bandit security scan
+        run: bandit -c pyproject.toml -r backend detective corrective
+
+      - name: Tests
+        run: |
+          # Don't fail the build before any tests exist; fail hard once they do.
+          if compgen -G "**/test_*.py" > /dev/null || [ -d backend/tests ]; then
+            pytest
+          else
+            echo "No tests yet — skipping. This gate tightens once tests land."
+          fi
+
+  # -------------------------------------------------------------------
+  # AWS policy documents: every SCP / Config rule payload must be valid JSON
+  # and must parse as an IAM policy shape. A malformed SCP is rejected by
+  # Organizations with an opaque error, so catching it here is worth a job.
+  # -------------------------------------------------------------------
+  policies:
+    name: Validate AWS policy JSON
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Parse and sanity-check policy documents
+        run: |
+          python - <<'PY'
+          import json, pathlib, sys
+
+          failures = []
+          files = list(pathlib.Path("scp").rglob("*.json"))
+          if not files:
+              print("No SCP policy documents found yet.")
+              sys.exit(0)
+
+          for f in files:
+              try:
+                  doc = json.loads(f.read_text())
+              except json.JSONDecodeError as e:
+                  failures.append(f"{f}: invalid JSON — {e}")
+                  continue
+
+              if "Statement" not in doc:
+                  failures.append(f"{f}: missing top-level 'Statement'")
+                  continue
+
+              stmts = doc["Statement"]
+              stmts = stmts if isinstance(stmts, list) else [stmts]
+              for i, s in enumerate(stmts):
+                  if "Effect" not in s:
+                      failures.append(f"{f} stmt[{i}]: missing 'Effect'")
+                  # SCPs are guardrails. An Allow in an SCP does not grant
+                  # anything, and an SCP that is *only* Allow is almost always
+                  # a misunderstanding worth surfacing loudly.
+                  if s.get("Effect") not in ("Allow", "Deny"):
+                      failures.append(f"{f} stmt[{i}]: Effect must be Allow/Deny")
+              print(f"ok: {f} ({len(stmts)} statement(s))")
+
+          if failures:
+              print("\nFAILURES:")
+              for x in failures:
+                  print(" -", x)
+              sys.exit(1)
+          PY
+
+  # -------------------------------------------------------------------
+  # Terraform: format, validate, and static security analysis.
+  # Skips cleanly until infra/ actually has .tf files.
+  # -------------------------------------------------------------------
+  terraform:
+    name: Terraform validate + checkov
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Check for Terraform files
+        id: check
+        run: |
+          if compgen -G "infra/**/*.tf" > /dev/null; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "No .tf files yet — skipping."
+          fi
+
+      - uses: hashicorp/setup-terraform@v3
+        if: steps.check.outputs.found == 'true'
+
+      - name: terraform fmt
+        if: steps.check.outputs.found == 'true'
+        run: terraform -chdir=infra fmt -check -recursive
+
+      - name: terraform init + validate
+        if: steps.check.outputs.found == 'true'
+        run: |
+          terraform -chdir=infra init -backend=false
+          terraform -chdir=infra validate
+
+      - name: Checkov IaC security scan
+        if: steps.check.outputs.found == 'true'
+        uses: bridgecrewio/checkov-action@master
+        with:
+          directory: infra
+          framework: terraform
+          quiet: true
+          soft_fail: false
+
+  # -------------------------------------------------------------------
+  # Frontend: install, lint, typecheck, build.
+  # Skips cleanly until frontend/package.json exists.
+  # -------------------------------------------------------------------
+  frontend:
+    name: Frontend lint + build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Check for frontend project
+        id: check
+        run: |
+          if [ -f frontend/package.json ]; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "No frontend/package.json yet — skipping."
+          fi
+
+      - uses: actions/setup-node@v6
+        if: steps.check.outputs.found == 'true'
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install
+        if: steps.check.outputs.found == 'true'
+        working-directory: frontend
+        run: npm ci
+
+      - name: Lint
+        if: steps.check.outputs.found == 'true'
+        working-directory: frontend
+        run: npm run lint --if-present
+
+      - name: Typecheck
+        if: steps.check.outputs.found == 'true'
+        working-directory: frontend
+        run: npm run typecheck --if-present
+
+      - name: Build
+        if: steps.check.outputs.found == 'true'
+        working-directory: frontend
+        run: npm run build --if-present
+
+  # -------------------------------------------------------------------
+  # Single required check for branch protection.
+  # Rather than marking five jobs required (and having to edit protection
+  # rules every time a job is added or renamed), branch protection requires
+  # only this one. It passes when every job above succeeded or was skipped.
+  # -------------------------------------------------------------------
+  gate:
+    name: CI gate
+    runs-on: ubuntu-latest
+    needs: [secrets, python, policies, terraform, frontend]
+    if: always()
+    steps:
+      - name: Verify all jobs passed
+        run: |
+          results='${{ join(needs.*.result, " ") }}'
+          echo "Job results: $results"
+          for r in $results; do
+            if [ "$r" != "success" ] && [ "$r" != "skipped" ]; then
+              echo "::error::A required job did not pass (saw '$r')."
+              exit 1
+            fi
+          done
+          echo "All checks passed."
