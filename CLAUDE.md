@@ -105,15 +105,11 @@ Commit messages follow Conventional Commits (`feat:`, `fix:`, `docs:`,
 ## Environment
 
 macOS arm64. Installed: node 26, npm 11, aws-cli 2.36, gh 2.96, pre-commit 4.6,
-Docker, git.
+actionlint, terraform 1.15.8 (hashicorp/tap), Docker, git.
 
 Python: the shell default is 3.14 (python.org, via `.zprofile`). The project
 deliberately uses **Python 3.12** (`brew install python@3.12`) for the venv, so
 that local == CI == container. Version parity across environments is the point;
 3.14 locally against 3.12 in CI is how "works on my machine" happens.
-
-**Terraform is not installed** — Homebrew's `hashicorp/tap` builds from source
-and the Xcode Command Line Tools on this machine (15.3.0) are too old to
-compile it. Resolve before step 6.
 
 Backend uses a venv at `backend/.venv`.
