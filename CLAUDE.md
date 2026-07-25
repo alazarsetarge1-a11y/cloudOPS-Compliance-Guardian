@@ -53,11 +53,20 @@ SCPs are newer territory — walk through those step by step.**
 2. **Detective** — Config rules + Boto3 checks, written fresh for this repo
    (not a port of the old CIS Benchmark script).
 3. **Corrective** — SSM Automation runbooks mapped 1:1 to detective findings.
-4. **Backend** — FastAPI over findings + remediations.
+4. **Backend** — FastAPI over findings + remediations. **Build the service
+   layer transport-agnostic** (pure functions, no FastAPI/HTTP objects) so the
+   later MCP server wraps the same functions instead of duplicating logic.
+   See the MCP requirement below.
 5. **Frontend** — React + Tailwind dashboard. Highest quality bar.
 6. **Infra** — Terraform, then *actually deploy* to ECS Fargate.
-7. **Cost breakdown** doc.
-8. **Final full-stack report** — architecture decisions, per-layer walkthrough,
+7. **MCP server** (`/mcp_server`) — expose compliance tools (get_violations,
+   get_scp_denials, trigger_remediation, get_compliance_score) over MCP via
+   FastMCP; stdio + Streamable HTTP; auth on HTTP. Thin adapters over the Step-4
+   service layer. Deferred but firm — details in the `ccg-mcp-server-layer`
+   memory. Decisions to lock first: gate `trigger_remediation`? API key vs
+   OAuth2? separate ECS service vs shared vs on-demand (cost)?
+8. **Cost breakdown** doc.
+9. **Final full-stack report** — architecture decisions, per-layer walkthrough,
    tradeoffs, costs, what to extend next. Feeds resume bullets and interview
    answers.
 
