@@ -48,7 +48,7 @@ repos:
   # Applies to detective/ checks, corrective/ helpers, backend/ FastAPI app.
   # ---------------------------------------------------------------------
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.14.5
+    rev: v0.16.0 # keep in lockstep with the pinned ruff in .github/workflows/ci.yml
     hooks:
       - id: ruff-check
         args: [--fix]
