@@ -79,9 +79,14 @@ is more important than anything else.
   `check_id` or by account. Row expands to show the `evidence` payload; that
   detail is what makes it read as a real compliance tool rather than a mockup.
 - **IAM risk heatmap** — principals on one axis, risk dimensions on the other
-  (privilege breadth, MFA, key age, last used). Use a **sequential** scale, not
-  a categorical one — this is magnitude data. Cells need tooltips and keyboard
-  focus, not hover-only reveal.
+  (privilege breadth, MFA, key age, last used). **Encode each dimension by its
+  own data type — do not paint them all on one sequential gradient**, which
+  would imply a false shared ranking. MFA is binary (has/hasn't → two distinct
+  states, plus an explicit "unknown"); key age and last-used are quantitative
+  recency (sequential scale, normalized per dimension); privilege breadth is
+  ordinal. Normalize within each dimension so a "hot" cell means the same
+  severity across the row. Cells need tooltips and keyboard focus, not
+  hover-only reveal.
 - **Remediation timeline** — the differentiator. Show finding detected →
   runbook triggered → resolved, with real durations. This is the visual proof
   of the Preventive/Detective/Corrective thesis. Give it room.

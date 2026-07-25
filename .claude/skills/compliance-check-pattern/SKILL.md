@@ -25,13 +25,21 @@ class Finding:
     title: str             # short, human-readable
     detail: str            # what specifically was wrong, with the observed value
     remediation: str       # what fixes it, in one sentence
-    evidence: dict         # raw API response fragment that justified the verdict
+    evidence: dict         # redacted, allowlisted, size-bounded proof of the verdict
     checked_at: datetime    # UTC, timezone-aware
 ```
 
 `evidence` matters more than it looks. In a compliance context, a finding
-without the underlying API response backing it is an assertion, not evidence.
-It is also what lets the dashboard show *why* something was flagged.
+without the underlying API data backing it is an assertion, not evidence. It is
+also what lets the dashboard show *why* something was flagged.
+
+But **never dump the raw API response into `evidence`.** These responses can
+carry secrets, session tokens, and sensitive tag values, and this dict flows all
+the way to the dashboard — a security tool must not itself become the leak.
+Build `evidence` from an **allowlist** of the specific fields that justify the
+verdict (e.g. `{"public_access_block": false}`), redact anything credential- or
+PII-shaped, and bound its size. Treat it as untrusted output crossing a trust
+boundary, because it is.
 
 ## Three rules that separate a real check from a script
 
@@ -96,10 +104,14 @@ s3 = boto3.client("s3", config=BOTO_CFG)
 
 ## Credentials
 
-Never in code, never in a config file, never in a constructor argument.
-Credentials come from the environment: your local AWS profile when developing,
-the ECS task role in production. If you find yourself typing `aws_access_key_id=`
-anywhere, stop — that is the bug gitleaks exists to catch.
+Never in code, never in a config file, never in a constructor argument. Let
+Boto3 resolve them through its **default credential provider chain** and pass
+nothing: it walks environment vars → shared config/credentials profiles → IAM
+Identity Center (SSO) → assumed roles → EC2/ECS/EKS instance and task roles, in
+that order. That means the *same* code runs unchanged from your SSO profile
+locally (`--profile ccg`) to the ECS task role in production — you never name a
+credential source. If you find yourself typing `aws_access_key_id=` anywhere,
+stop — that is the bug gitleaks exists to catch.
 
 ## Severity — pick it deliberately
 

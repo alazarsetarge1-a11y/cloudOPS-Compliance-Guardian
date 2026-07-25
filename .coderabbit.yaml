@@ -7,15 +7,13 @@
 language: en-US
 early_access: false
 
-# The author is a cybersecurity student building this as a portfolio piece and
-# learning AWS/cloud-security engineering. Reviews should teach, not just flag.
+# The author is a cybersecurity student building this as a portfolio piece.
+# Reviews should teach, not just flag. NOTE: schema caps this field at 250 chars.
 tone_instructions: >-
-  Explain the reasoning behind each suggestion, not only what to change. The
-  author needs to understand every issue well enough to defend the fix in a
-  technical interview with no notes. Prefer teaching the underlying principle
-  (why a paginator matters, why an SCP condition fails open, why a CORS setting
-  is unsafe) over terse directives. Be direct and specific about security
-  issues — do not soften them — but always say why they are a risk.
+  Explain the reasoning behind each suggestion, not just what to change. The
+  author is a student who must defend every fix in an interview, so teach the
+  underlying principle. Be direct about security risks and always say why they
+  matter.
 
 reviews:
   # "assertive" surfaces more issues, including nits and style concerns.
@@ -56,7 +54,9 @@ reviews:
       instructions: |
         These are AWS Organizations Service Control Policies (SCPs).
         Review with these specific failure modes in mind:
-        - SCPs are DENY-only guardrails. They never grant permission. Flag any
+        - An SCP sets a permission CEILING; it never grants IAM permissions.
+          Deny statements act as guardrails; Allow statements form allowlists
+          (permit only the listed actions, deny everything else). Flag any
           reasoning or comment that implies an SCP grants access.
         - Verify Deny statements use the correct condition operator. Tag
           enforcement must use `Null` on `aws:RequestTag/<key>` (true = tag
