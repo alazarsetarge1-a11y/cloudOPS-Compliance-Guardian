@@ -106,12 +106,16 @@ s3 = boto3.client("s3", config=BOTO_CFG)
 
 Never in code, never in a config file, never in a constructor argument. Let
 Boto3 resolve them through its **default credential provider chain** and pass
-nothing: it walks environment vars → shared config/credentials profiles → IAM
-Identity Center (SSO) → assumed roles → EC2/ECS/EKS instance and task roles, in
-that order. That means the *same* code runs unchanged from your SSO profile
-locally (`--profile ccg`) to the ECS task role in production — you never name a
-credential source. If you find yourself typing `aws_access_key_id=` anywhere,
-stop — that is the bug gitleaks exists to catch.
+nothing: it checks, in a defined order, sources such as environment variables,
+shared config/credentials profiles, IAM Identity Center (SSO), assumed roles,
+and EC2/ECS/EKS container and instance roles. Rely on the chain rather than
+memorizing the order — botocore defines it and it can change between versions
+([botocore credential docs](https://boto3.amazonaws.com/v1/documentation/api/latest/guide/credentials.html)).
+Note `AWS_PROFILE` / `--profile ccg` only selects *which* shared profile to read;
+it is not itself a separate step in the chain. The payoff: the *same* code runs
+unchanged from your SSO profile locally to the ECS task role in production,
+naming no credential source. If you find yourself typing `aws_access_key_id=`
+anywhere, stop — that is the bug gitleaks exists to catch.
 
 ## Severity — pick it deliberately
 

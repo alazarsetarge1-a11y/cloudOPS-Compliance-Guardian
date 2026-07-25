@@ -84,8 +84,11 @@ is more important than anything else.
   would imply a false shared ranking. MFA is binary (has/hasn't → two distinct
   states, plus an explicit "unknown"); key age and last-used are quantitative
   recency (sequential scale, normalized per dimension); privilege breadth is
-  ordinal. Normalize within each dimension so a "hot" cell means the same
-  severity across the row. Cells need tooltips and keyboard focus, not
+  ordinal. Normalize each dimension **independently, across principals** (down
+  its own column), and signal in the UI that intensity is comparable only
+  *within* a dimension, never between them — a "hot" MFA cell and a "hot"
+  key-age cell do not encode the same magnitude of risk, and implying they do is
+  the exact trap to avoid. Cells need tooltips and keyboard focus, not
   hover-only reveal.
 - **Remediation timeline** — the differentiator. Show finding detected →
   runbook triggered → resolved, with real durations. This is the visual proof

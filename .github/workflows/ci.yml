@@ -82,7 +82,11 @@ jobs:
       - name: Tests
         run: |
           # Don't fail the build before any tests exist; fail hard once they do.
-          if compgen -G "**/test_*.py" > /dev/null || [ -d backend/tests ]; then
+          # Use find, not `compgen -G "**/..."`: bash ** is NOT recursive
+          # unless globstar is set, so the glob would miss tests in subdirs and
+          # silently skip the whole suite. Prune vendored dirs so a dependency's
+          # own test files don't trip the guard.
+          if [ -n "$(find . \( -path ./frontend -o -name .venv -o -name node_modules \) -prune -o -name 'test_*.py' -print -quit)" ] || [ -d backend/tests ]; then
             pytest
           else
             echo "No tests yet — skipping. This gate tightens once tests land."
@@ -160,7 +164,9 @@ jobs:
       - name: Check for Terraform files
         id: check
         run: |
-          if compgen -G "infra/**/*.tf" > /dev/null; then
+          # find recurses reliably; `compgen -G "infra/**/*.tf"` would not match
+          # nested modules (or infra/*.tf) without globstar, skipping the scan.
+          if [ -n "$(find infra -name '*.tf' -print -quit 2>/dev/null)" ]; then
             echo "found=true" >> "$GITHUB_OUTPUT"
           else
             echo "found=false" >> "$GITHUB_OUTPUT"
