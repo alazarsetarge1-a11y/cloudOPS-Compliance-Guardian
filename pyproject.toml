@@ -1,0 +1,45 @@
+# Shared Python tooling config for the whole repo.
+# detective/, corrective/, and backend/ are all linted from here so there is
+# one source of truth rather than per-folder configs that drift apart.
+
+[project]
+name = "cloud-compliance-guardian"
+version = "0.1.0"
+description = "Layered AWS compliance system: preventive SCP, detective Config/Boto3 checks, corrective SSM Automation, FastAPI + React dashboard."
+requires-python = ">=3.11"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+# ruff 0.16+ formats Python code blocks inside Markdown. Our .md files are docs
+# and teaching skills with illustrative (sometimes intentionally-wrong) snippets
+# — a Python formatter has no business rewriting them. Exclude all Markdown.
+extend-exclude = ["frontend", ".venv", "infra/.terraform", "**/*.md"]
+
+[tool.ruff.lint]
+# E/W  pycodestyle   F   pyflakes      I  import sorting
+# B    bugbear       UP  pyupgrade     S  bandit-style security rules
+# ANN  annotations   RUF ruff-specific
+select = ["E", "W", "F", "I", "B", "UP", "S", "C4", "SIM", "RUF"]
+ignore = [
+  "E501",   # line length is handled by the formatter
+  "S101",   # assert is fine in tests
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests may use asserts, hardcoded dummy creds, and subprocess freely.
+"**/tests/**" = ["S", "ANN"]
+"**/test_*.py" = ["S", "ANN"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.bandit]
+exclude_dirs = [".venv", "venv", "node_modules", "frontend", "tests", ".git"]
+# B101 assert_used — noisy and low value outside production code paths.
+skips = ["B101"]
+
+[tool.pytest.ini_options]
+testpaths = ["backend/tests", "detective/tests", "corrective/tests"]
+pythonpath = ["."]
+addopts = "-q"

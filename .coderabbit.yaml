@@ -1,0 +1,157 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+#
+# CodeRabbit — layer 3 of the quality gate (local hooks -> CI -> AI review).
+# CodeRabbit reviews PULL REQUESTS only. It cannot see a direct push to main,
+# which is why main is branch-protected and all work flows through PRs.
+
+language: en-US
+early_access: false
+
+# The author is a cybersecurity student building this as a portfolio piece.
+# Reviews should teach, not just flag. NOTE: schema caps this field at 250 chars.
+tone_instructions: >-
+  Explain the reasoning behind each suggestion, not just what to change. The
+  author is a student who must defend every fix in an interview, so teach the
+  underlying principle. Be direct about security risks and always say why they
+  matter.
+
+reviews:
+  # "assertive" surfaces more issues, including nits and style concerns.
+  # For a portfolio repo you WANT the extra signal — this is a learning tool,
+  # not a high-velocity production repo where noise costs the team time.
+  profile: assertive
+
+  # Post a review comment rather than a formal "Changes requested" block.
+  # As a solo maintainer, blocking yourself on your own review is friction
+  # without benefit; CI is the thing that should actually block the merge.
+  request_changes_workflow: false
+
+  high_level_summary: true
+  review_status: true
+  collapse_walkthrough: false
+  poem: false
+
+  auto_review:
+    enabled: true
+    drafts: false
+    base_branches: ["main"]
+
+  # Exclude vendored/generated files from review. These are gitignored where
+  # possible, but lockfiles ARE committed and a lockfile diff is pure noise —
+  # nothing to learn from CodeRabbit reviewing a resolved dependency tree.
+  # Exclusion-only means everything else is still reviewed.
+  path_filters:
+    - "!**/*.lock"
+    - "!**/package-lock.json"
+    - "!**/.terraform.lock.hcl"
+    - "!**/dist/**"
+    - "!**/build/**"
+
+  # Per-directory review focus. Each layer of this system has a different
+  # failure mode, so a generic "review this code" prompt underperforms.
+  path_instructions:
+    - path: "scp/**"
+      instructions: |
+        These are AWS Organizations Service Control Policies (SCPs).
+        Review with these specific failure modes in mind:
+        - An SCP sets a permission CEILING; it never grants IAM permissions.
+          Deny statements act as guardrails; Allow statements form allowlists
+          (permit only the listed actions, deny everything else). Flag any
+          reasoning or comment that implies an SCP grants access.
+        - Verify Deny statements use the correct condition operator. Tag
+          enforcement must use `Null` on `aws:RequestTag/<key>` (true = tag
+          absent) or `StringNotEquals`/`ForAllValues` variants. A `StringEquals`
+          where `Null` is required silently fails open.
+        - Check that the action list actually covers the resource types claimed.
+          e.g. blocking RDS requires BOTH rds:CreateDBInstance and
+          rds:CreateDBCluster; blocking only one leaves a bypass.
+        - Flag any policy that could lock the management account out of its own
+          organization, or that lacks an exemption for the org's break-glass
+          role. This is the #1 way SCPs cause production incidents.
+        - Confirm `aws:PrincipalArn` / service-linked-role exemptions are scoped
+          narrowly, not wildcarded.
+
+    - path: "detective/**"
+      instructions: |
+        Boto3 compliance checks and AWS Config rule definitions.
+        - Every paginated AWS API call MUST use a paginator or explicitly handle
+          NextToken. A non-paginated list_* call silently reports only the first
+          page, producing false "compliant" results — a correctness bug that
+          looks like working code.
+        - Distinguish "resource is compliant" from "check failed to evaluate".
+          Swallowing a ClientError and returning COMPLIANT is a security bug.
+        - Flag broad `except Exception: pass`. AccessDenied must surface, not
+          be treated as a pass.
+        - Boto3 clients should be constructed once and reused, not per-resource
+          inside a loop.
+        - No credentials in code. Credentials come from the instance/task role.
+
+    - path: "corrective/**"
+      instructions: |
+        SSM Automation runbooks that mutate live AWS resources.
+        - These take DESTRUCTIVE actions automatically. Verify each runbook is
+          idempotent and safe to re-run on an already-remediated resource.
+        - Check the assumed IAM role is least-privilege and scoped by tag or
+          resource ARN, never `Resource: "*"` with a mutating action.
+        - Confirm there is a guard against remediating resources outside the
+          intended scope (e.g. a required tag filter or account condition).
+        - Every runbook should be traceable: what triggered it, what it changed,
+          and when — the dashboard depends on this history being accurate.
+
+    - path: "backend/**"
+      instructions: |
+        FastAPI service exposing compliance findings.
+        - Findings data describes security weaknesses in a live AWS account.
+          Treat it as sensitive: check for missing authn/authz on endpoints,
+          and for account IDs / ARNs leaking through error responses.
+        - CORS must not be `allow_origins=["*"]` alongside credentials.
+        - Pydantic response models should be explicit so internal fields do not
+          leak by accident through dict passthrough.
+        - Flag any endpoint that takes a user-supplied string into a Boto3 call
+          or query without validation.
+
+    - path: "frontend/**"
+      instructions: |
+        React + Tailwind dashboard. This is a portfolio piece — the UI quality
+        bar is high.
+        - Flag ad-hoc Tailwind utility soup where a design-system token or a
+          shared component should be used. Repeated color/spacing literals are
+          a defect here, not a nit.
+        - Check accessibility: color is not the only severity signal, interactive
+          elements are reachable by keyboard, charts have text alternatives.
+        - Flag `dangerouslySetInnerHTML` and any unescaped rendering of
+          finding data (resource names/ARNs are attacker-influenced input).
+        - Watch for missing loading and error states on data fetches.
+
+    - path: "infra/**"
+      instructions: |
+        Terraform deploying to ECS Fargate.
+        - No hardcoded account IDs, secrets, or region assumptions.
+        - Security groups must not allow 0.0.0.0/0 on anything but 80/443 at
+          the load balancer.
+        - Check state backend config, resource tagging (this repo's own SCP
+          tag schema should apply to its own infra), and that IAM task roles
+          are least-privilege.
+        - Flag anything that would materially raise cost without justification;
+          this project has a documented cost target.
+
+  tools:
+    gitleaks:
+      enabled: true
+    checkov:
+      enabled: true
+    ruff:
+      enabled: true
+    actionlint:
+      enabled: true
+    markdownlint:
+      enabled: true
+    eslint:
+      enabled: true
+    hadolint:
+      enabled: true
+    yamllint:
+      enabled: true
+
+chat:
+  auto_reply: true
