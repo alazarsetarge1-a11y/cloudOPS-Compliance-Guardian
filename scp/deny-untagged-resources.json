@@ -6,6 +6,7 @@
       "Effect": "Deny",
       "Action": [
         "ec2:RunInstances",
+        "ec2:CreateVolume",
         "s3:CreateBucket",
         "rds:CreateDBInstance",
         "rds:CreateDBCluster",
@@ -31,6 +32,7 @@
       "Effect": "Deny",
       "Action": [
         "ec2:RunInstances",
+        "ec2:CreateVolume",
         "s3:CreateBucket",
         "rds:CreateDBInstance",
         "rds:CreateDBCluster",
@@ -56,6 +58,7 @@
       "Effect": "Deny",
       "Action": [
         "ec2:RunInstances",
+        "ec2:CreateVolume",
         "s3:CreateBucket",
         "rds:CreateDBInstance",
         "rds:CreateDBCluster",
@@ -81,6 +84,7 @@
       "Effect": "Deny",
       "Action": [
         "ec2:RunInstances",
+        "ec2:CreateVolume",
         "s3:CreateBucket",
         "rds:CreateDBInstance",
         "rds:CreateDBCluster",

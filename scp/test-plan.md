@@ -48,6 +48,8 @@ OU `ou-dkh0-yrjl7roq`, from `OrganizationAccountAccessRole` in `342524208863`.
 | 1 | **EC2 deny** — `RunInstances`, no tags | Denied (explicit deny) | ✅ `UnauthorizedOperation` — explicit deny in SCP p-4nsaynd6 |
 | 2 | **EC2 allow** — `RunInstances`, all 4 tags on instance + volume | Allowed (`DryRunOperation`) | ✅ `DryRunOperation` (would have succeeded) |
 | 3 | **EC2 partial** — `RunInstances`, only 3 of 4 tags | Denied (each tag required independently) | ✅ Denied — proves per-tag OR logic |
+| 3a | **EC2 volume deny** — `CreateVolume`, no tags | Denied | ✅ Denied |
+| 3b | **EC2 volume allow** — `CreateVolume` + volume tags | Allowed (created, then deleted) | ✅ Created `vol-…`, then deleted |
 | 4 | **S3 deny** — `CreateBucket`, no tags | Denied | ✅ Denied |
 | 5 | **S3 allow** — `CreateBucket` + `Tags=[…all 4…]` | Allowed (bucket created, then deleted) | ✅ Created, then deleted — S3 tag-on-create works |
 | 6 | **RDS deny** — `CreateDBInstance`, no tags | Denied (nothing created) | ✅ Denied — nothing created |
@@ -84,14 +86,24 @@ aws s3api create-bucket --region us-east-1 \
   --create-bucket-configuration 'Tags=[{Key=owner,Value=alazar},{Key=environment,Value=sandbox},{Key=cost-center,Value=cc-1000},{Key=data-classification,Value=internal}]'
 aws s3api delete-bucket --bucket ccg-scp-test-tagged-<rand> --region us-east-1
 
-# 6 · RDS deny
+# 3a · EC2 standalone volume deny
+aws ec2 create-volume --availability-zone us-east-1a --size 1 --region us-east-1
+
+# 3b · EC2 standalone volume allow (then delete the returned VolumeId)
+aws ec2 create-volume --availability-zone us-east-1a --size 1 --region us-east-1 \
+  --tag-specifications 'ResourceType=volume,Tags=[{Key=owner,Value=alazar},{Key=environment,Value=sandbox},{Key=cost-center,Value=cc-1000},{Key=data-classification,Value=internal}]'
+
+# 6 · RDS deny  (password required, or AWS rejects at validation BEFORE the SCP
+#     is evaluated — a malformed request can't prove a deny policy)
 aws rds create-db-instance --db-instance-identifier ccg-scp-test \
   --db-instance-class db.t3.micro --engine postgres \
-  --master-username admin --allocated-storage 20 --region us-east-1
+  --master-username adminuser --master-user-password 'ChangeMe-Throwaway1' \
+  --allocated-storage 20 --region us-east-1
 
 # 7 · RDS cluster deny
 aws rds create-db-cluster --db-cluster-identifier ccg-scp-test-cluster \
-  --engine aurora-postgresql --master-username admin --region us-east-1
+  --engine aurora-postgresql --master-username adminuser \
+  --master-user-password 'ChangeMe-Throwaway1' --region us-east-1
 
 # 8 · IAM deny
 aws iam create-role --role-name ccg-scp-test-role \
@@ -125,7 +137,19 @@ Organization. Two findings surfaced during the run and were resolved:
    validates that the S3 line is real, not the historical no-op most examples
    assume.
 
-**Cost:** zero. EC2 used `--dry-run` (nothing launched); all deny cases created
-nothing; the S3 bucket and IAM role from the allow cases were deleted
-immediately. The RDS allow case was intentionally not run live (cost/time); its
-deny case passed and its condition structure is identical to the validated ones.
+3. **Standalone-volume bypass closed.** `ec2:CreateVolume` was added to the deny
+   actions after review: `RunInstances` only protects volumes created *during*
+   an instance launch, but a standalone EBS volume can be created directly and
+   also honors `aws:RequestTag`. Validated: untagged `CreateVolume` denied,
+   tagged one created then deleted (cases 3a/3b).
+
+**RDS is validated deny-only.** Untagged `CreateDBInstance` and `CreateDBCluster`
+are confirmed blocked. The tagged **allow** path was **not** run live — an RDS
+instance is billable and slow to provision. We deliberately do **not** claim the
+EC2/S3 allow results transfer to RDS: RDS has its own authorization path, and the
+S3 finding above is proof that per-service behavior can differ. Verifying the RDS
+allow path is left as a follow-up (short-lived tagged instance + cleanup).
+
+**Cost:** effectively zero. EC2 used `--dry-run` (nothing launched); all deny
+cases created nothing; the S3 bucket, IAM role, and EBS volume from allow cases
+were deleted immediately.

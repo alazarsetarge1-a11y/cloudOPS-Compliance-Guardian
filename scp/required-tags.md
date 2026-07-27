@@ -21,8 +21,13 @@ reporting attributes spend through them.
 
 ## Governed create actions
 
-`ec2:RunInstances` · `s3:CreateBucket` · `rds:CreateDBInstance` ·
-`rds:CreateDBCluster` · `iam:CreateRole`
+`ec2:RunInstances` · `ec2:CreateVolume` · `s3:CreateBucket` ·
+`rds:CreateDBInstance` · `rds:CreateDBCluster` · `iam:CreateRole`
+
+> `ec2:CreateVolume` is covered in addition to `RunInstances` because a
+> standalone EBS volume can be created directly (not just as part of an instance
+> launch), and that API also honors `aws:RequestTag` — without it, an untagged
+> volume created on its own would bypass the guardrail.
 
 ## Enforcement notes
 
