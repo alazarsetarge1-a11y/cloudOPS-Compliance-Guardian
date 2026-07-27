@@ -40,8 +40,9 @@ unset AWS_PROFILE   # now acting AS the member-account role
 
 ## Test cases
 
-**Run: 2026-07-25 — all 9 cases PASS** against policy `p-4nsaynd6` attached to
-OU `ou-dkh0-yrjl7roq`, from `OrganizationAccountAccessRole` in `342524208863`.
+**Run: 2026-07-25 — all cases PASS** (9 top-level cases + 2 EC2-volume subcases
+= **11 executions**) against policy `p-4nsaynd6` attached to OU
+`ou-dkh0-yrjl7roq`, from `OrganizationAccountAccessRole` in `342524208863`.
 
 | # | Case | Expectation | Actual result |
 |---|---|---|---|
@@ -93,17 +94,23 @@ aws ec2 create-volume --availability-zone us-east-1a --size 1 --region us-east-1
 aws ec2 create-volume --availability-zone us-east-1a --size 1 --region us-east-1 \
   --tag-specifications 'ResourceType=volume,Tags=[{Key=owner,Value=alazar},{Key=environment,Value=sandbox},{Key=cost-center,Value=cc-1000},{Key=data-classification,Value=internal}]'
 
-# 6 · RDS deny  (password required, or AWS rejects at validation BEFORE the SCP
-#     is evaluated — a malformed request can't prove a deny policy)
+# 6 · RDS deny
+#   SAFETY: run ONLY with the SCP confirmed attached. RDS has no --dry-run, so if
+#   the guardrail were absent/mis-scoped these WOULD create billable resources.
+#   Expect an explicit AccessDenied; on any unexpected success, delete at once:
+#     aws rds delete-db-instance --db-instance-identifier ccg-scp-test --skip-final-snapshot
+#   --manage-master-user-password: AWS generates and stores the password in
+#   Secrets Manager, so no static secret appears here, and the request still
+#   reaches the API (a valid request is required to actually prove the deny).
 aws rds create-db-instance --db-instance-identifier ccg-scp-test \
   --db-instance-class db.t3.micro --engine postgres \
-  --master-username adminuser --master-user-password 'ChangeMe-Throwaway1' \
+  --master-username adminuser --manage-master-user-password \
   --allocated-storage 20 --region us-east-1
 
-# 7 · RDS cluster deny
+# 7 · RDS cluster deny  (same safety notes; delete-db-cluster on unexpected success)
 aws rds create-db-cluster --db-cluster-identifier ccg-scp-test-cluster \
   --engine aurora-postgresql --master-username adminuser \
-  --master-user-password 'ChangeMe-Throwaway1' --region us-east-1
+  --manage-master-user-password --region us-east-1
 
 # 8 · IAM deny
 aws iam create-role --role-name ccg-scp-test-role \
@@ -118,8 +125,9 @@ aws iam delete-role --role-name ccg-scp-test-role
 
 ## Result summary — 2026-07-25
 
-**All 9 cases pass.** The preventive layer is validated against a live
-Organization. Two findings surfaced during the run and were resolved:
+**All cases pass** (9 top-level + 2 subcases, 11 executions). The preventive
+layer is validated against a live Organization. Findings surfaced during the run
+and were resolved:
 
 1. **EC2 `RunInstances` is multi-resource.** The first allow-case run was denied
    on `arn:aws:ec2:*:*:network-interface/*` — EC2 authorizes the tag condition
