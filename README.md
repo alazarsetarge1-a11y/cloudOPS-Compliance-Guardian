@@ -52,7 +52,7 @@ Most compliance-checker projects stop at detection: a script runs, prints a repo
 
 ## Build status
 
-- [ ] Preventive — SCP guardrail
+- [x] Preventive — SCP guardrail *(validated against a live AWS Organization — see `scp/test-plan.md`)*
 - [ ] Detective — Config rules + Boto3 checks
 - [ ] Corrective — SSM Automation runbooks
 - [ ] Backend — FastAPI

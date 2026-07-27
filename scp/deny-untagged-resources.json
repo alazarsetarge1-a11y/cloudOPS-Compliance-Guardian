@@ -1,0 +1,105 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "DenyCreateWithoutOwnerTag",
+      "Effect": "Deny",
+      "Action": [
+        "ec2:RunInstances",
+        "s3:CreateBucket",
+        "rds:CreateDBInstance",
+        "rds:CreateDBCluster",
+        "iam:CreateRole"
+      ],
+      "Resource": [
+        "arn:aws:ec2:*:*:instance/*",
+        "arn:aws:ec2:*:*:volume/*",
+        "arn:aws:s3:::*",
+        "arn:aws:rds:*:*:db:*",
+        "arn:aws:rds:*:*:cluster:*",
+        "arn:aws:iam::*:role/*"
+      ],
+      "Condition": {
+        "Null": { "aws:RequestTag/owner": "true" },
+        "ArnNotLike": {
+          "aws:PrincipalArn": "arn:aws:iam::419022575959:role/OrganizationBreakGlass"
+        }
+      }
+    },
+    {
+      "Sid": "DenyCreateWithoutEnvironmentTag",
+      "Effect": "Deny",
+      "Action": [
+        "ec2:RunInstances",
+        "s3:CreateBucket",
+        "rds:CreateDBInstance",
+        "rds:CreateDBCluster",
+        "iam:CreateRole"
+      ],
+      "Resource": [
+        "arn:aws:ec2:*:*:instance/*",
+        "arn:aws:ec2:*:*:volume/*",
+        "arn:aws:s3:::*",
+        "arn:aws:rds:*:*:db:*",
+        "arn:aws:rds:*:*:cluster:*",
+        "arn:aws:iam::*:role/*"
+      ],
+      "Condition": {
+        "Null": { "aws:RequestTag/environment": "true" },
+        "ArnNotLike": {
+          "aws:PrincipalArn": "arn:aws:iam::419022575959:role/OrganizationBreakGlass"
+        }
+      }
+    },
+    {
+      "Sid": "DenyCreateWithoutCostCenterTag",
+      "Effect": "Deny",
+      "Action": [
+        "ec2:RunInstances",
+        "s3:CreateBucket",
+        "rds:CreateDBInstance",
+        "rds:CreateDBCluster",
+        "iam:CreateRole"
+      ],
+      "Resource": [
+        "arn:aws:ec2:*:*:instance/*",
+        "arn:aws:ec2:*:*:volume/*",
+        "arn:aws:s3:::*",
+        "arn:aws:rds:*:*:db:*",
+        "arn:aws:rds:*:*:cluster:*",
+        "arn:aws:iam::*:role/*"
+      ],
+      "Condition": {
+        "Null": { "aws:RequestTag/cost-center": "true" },
+        "ArnNotLike": {
+          "aws:PrincipalArn": "arn:aws:iam::419022575959:role/OrganizationBreakGlass"
+        }
+      }
+    },
+    {
+      "Sid": "DenyCreateWithoutDataClassificationTag",
+      "Effect": "Deny",
+      "Action": [
+        "ec2:RunInstances",
+        "s3:CreateBucket",
+        "rds:CreateDBInstance",
+        "rds:CreateDBCluster",
+        "iam:CreateRole"
+      ],
+      "Resource": [
+        "arn:aws:ec2:*:*:instance/*",
+        "arn:aws:ec2:*:*:volume/*",
+        "arn:aws:s3:::*",
+        "arn:aws:rds:*:*:db:*",
+        "arn:aws:rds:*:*:cluster:*",
+        "arn:aws:iam::*:role/*"
+      ],
+      "Condition": {
+        "Null": { "aws:RequestTag/data-classification": "true" },
+        "ArnNotLike": {
+          "aws:PrincipalArn": "arn:aws:iam::419022575959:role/OrganizationBreakGlass"
+        }
+      }
+    }
+  ]
+}
