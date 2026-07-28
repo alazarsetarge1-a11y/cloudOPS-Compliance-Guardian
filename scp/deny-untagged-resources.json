@@ -23,7 +23,7 @@
       "Condition": {
         "Null": { "aws:RequestTag/owner": "true" },
         "ArnNotLike": {
-          "aws:PrincipalArn": "arn:aws:iam::419022575959:role/OrganizationBreakGlass"
+          "aws:PrincipalArn": "arn:aws:iam::111111111111:role/OrganizationBreakGlass"
         }
       }
     },
@@ -49,7 +49,7 @@
       "Condition": {
         "Null": { "aws:RequestTag/environment": "true" },
         "ArnNotLike": {
-          "aws:PrincipalArn": "arn:aws:iam::419022575959:role/OrganizationBreakGlass"
+          "aws:PrincipalArn": "arn:aws:iam::111111111111:role/OrganizationBreakGlass"
         }
       }
     },
@@ -75,7 +75,7 @@
       "Condition": {
         "Null": { "aws:RequestTag/cost-center": "true" },
         "ArnNotLike": {
-          "aws:PrincipalArn": "arn:aws:iam::419022575959:role/OrganizationBreakGlass"
+          "aws:PrincipalArn": "arn:aws:iam::111111111111:role/OrganizationBreakGlass"
         }
       }
     },
@@ -101,7 +101,7 @@
       "Condition": {
         "Null": { "aws:RequestTag/data-classification": "true" },
         "ArnNotLike": {
-          "aws:PrincipalArn": "arn:aws:iam::419022575959:role/OrganizationBreakGlass"
+          "aws:PrincipalArn": "arn:aws:iam::111111111111:role/OrganizationBreakGlass"
         }
       }
     }

@@ -3,11 +3,11 @@
 ## What this project is
 
 A layered AWS compliance system built on the **Preventive → Detective → Corrective**
-control model, with a React dashboard on top. It is Alazar's flagship portfolio
+control model, with a React dashboard on top. It is the author's flagship portfolio
 project for the Aug–Oct 2026 cloud-security internship recruiting cycle
 (Deloitte Risk & Financial Advisory Cyber, Dell SRO, AllianceBernstein).
 
-Repo: https://github.com/alazarsetarge1-a11y/cloudOPS-Compliance-Guardian
+Repo: https://github.com/<owner>/cloudOPS-Compliance-Guardian
 
 | Folder | Layer | Role |
 |---|---|---|
@@ -18,7 +18,7 @@ Repo: https://github.com/alazarsetarge1-a11y/cloudOPS-Compliance-Guardian
 | `frontend/` | UI | React + Tailwind dashboard |
 | `infra/` | Deploy | Terraform → ECS Fargate |
 
-## How to work with Alazar — non-negotiable
+## How to work with the author — non-negotiable
 
 These outrank speed. Do not shortcut them.
 

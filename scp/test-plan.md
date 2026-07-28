@@ -8,11 +8,11 @@ proves nothing). This plan records the exact commands and their real output.
 
 | Item | Value |
 |---|---|
-| Organization | `o-pv8dxdsc7b` (all-features) |
-| Root | `r-dkh0` |
-| Test OU | `scp-testing` (`ou-dkh0-yrjl7roq`) |
-| Member (test) account | `342524208863` — "CCG SCP Testing" |
-| Test principal | `arn:aws:iam::342524208863:role/OrganizationAccountAccessRole` (SCPs apply to it) |
+| Organization | `o-xxxxxxxxxx` (all-features) |
+| Root | `r-xxxx` |
+| Test OU | `scp-testing` (`ou-xxxx-xxxxxxxx`) |
+| Member (test) account | `222222222222` — "CCG SCP Testing" |
+| Test principal | `arn:aws:iam::222222222222:role/OrganizationAccountAccessRole` (SCPs apply to it) |
 | Region | `us-east-1` |
 
 **Why the allow case is the real test:** a plan with only deny cases can't tell
@@ -30,7 +30,7 @@ the allow path is proven by the identical condition structure shared with EC2/S3
 ```bash
 export AWS_PROFILE=ccg   # management-account SSO
 CREDS=$(aws sts assume-role \
-  --role-arn arn:aws:iam::342524208863:role/OrganizationAccountAccessRole \
+  --role-arn arn:aws:iam::222222222222:role/OrganizationAccountAccessRole \
   --role-session-name scp-test --query Credentials --output json)
 export AWS_ACCESS_KEY_ID=$(echo "$CREDS" | jq -r .AccessKeyId)
 export AWS_SECRET_ACCESS_KEY=$(echo "$CREDS" | jq -r .SecretAccessKey)
@@ -42,7 +42,7 @@ unset AWS_PROFILE   # now acting AS the member-account role
 
 **Run: 2026-07-25 — all cases PASS** (9 top-level cases + 2 EC2-volume subcases
 = **11 executions**) against policy `p-4nsaynd6` attached to OU
-`ou-dkh0-yrjl7roq`, from `OrganizationAccountAccessRole` in `342524208863`.
+`ou-xxxx-xxxxxxxx`, from `OrganizationAccountAccessRole` in `222222222222`.
 
 | # | Case | Expectation | Actual result |
 |---|---|---|---|
@@ -70,13 +70,13 @@ aws ec2 run-instances --image-id ami-0abcdef1234567890 --instance-type t3.micro 
 aws ec2 run-instances --image-id ami-0abcdef1234567890 --instance-type t3.micro \
   --dry-run --region us-east-1 \
   --tag-specifications \
-    'ResourceType=instance,Tags=[{Key=owner,Value=alazar},{Key=environment,Value=sandbox},{Key=cost-center,Value=cc-1000},{Key=data-classification,Value=internal}]' \
-    'ResourceType=volume,Tags=[{Key=owner,Value=alazar},{Key=environment,Value=sandbox},{Key=cost-center,Value=cc-1000},{Key=data-classification,Value=internal}]'
+    'ResourceType=instance,Tags=[{Key=owner,Value=example-owner},{Key=environment,Value=sandbox},{Key=cost-center,Value=cc-1000},{Key=data-classification,Value=internal}]' \
+    'ResourceType=volume,Tags=[{Key=owner,Value=example-owner},{Key=environment,Value=sandbox},{Key=cost-center,Value=cc-1000},{Key=data-classification,Value=internal}]'
 
 # 3 · EC2 partial (missing data-classification) → still denied
 aws ec2 run-instances --image-id ami-0abcdef1234567890 --instance-type t3.micro \
   --dry-run --region us-east-1 \
-  --tag-specifications 'ResourceType=instance,Tags=[{Key=owner,Value=alazar},{Key=environment,Value=sandbox},{Key=cost-center,Value=cc-1000}]'
+  --tag-specifications 'ResourceType=instance,Tags=[{Key=owner,Value=example-owner},{Key=environment,Value=sandbox},{Key=cost-center,Value=cc-1000}]'
 
 # 4 · S3 deny
 aws s3api create-bucket --bucket ccg-scp-test-notags-<rand> --region us-east-1
@@ -84,7 +84,7 @@ aws s3api create-bucket --bucket ccg-scp-test-notags-<rand> --region us-east-1
 # 5 · S3 allow  (then delete)
 aws s3api create-bucket --region us-east-1 \
   --bucket ccg-scp-test-tagged-<rand> \
-  --create-bucket-configuration 'Tags=[{Key=owner,Value=alazar},{Key=environment,Value=sandbox},{Key=cost-center,Value=cc-1000},{Key=data-classification,Value=internal}]'
+  --create-bucket-configuration 'Tags=[{Key=owner,Value=example-owner},{Key=environment,Value=sandbox},{Key=cost-center,Value=cc-1000},{Key=data-classification,Value=internal}]'
 aws s3api delete-bucket --bucket ccg-scp-test-tagged-<rand> --region us-east-1
 
 # 3a · EC2 standalone volume deny
@@ -92,7 +92,7 @@ aws ec2 create-volume --availability-zone us-east-1a --size 1 --region us-east-1
 
 # 3b · EC2 standalone volume allow (then delete the returned VolumeId)
 aws ec2 create-volume --availability-zone us-east-1a --size 1 --region us-east-1 \
-  --tag-specifications 'ResourceType=volume,Tags=[{Key=owner,Value=alazar},{Key=environment,Value=sandbox},{Key=cost-center,Value=cc-1000},{Key=data-classification,Value=internal}]'
+  --tag-specifications 'ResourceType=volume,Tags=[{Key=owner,Value=example-owner},{Key=environment,Value=sandbox},{Key=cost-center,Value=cc-1000},{Key=data-classification,Value=internal}]'
 
 # 6 · RDS deny
 #   SAFETY: run ONLY with the SCP confirmed attached. RDS has no --dry-run, so if
@@ -119,7 +119,7 @@ aws iam create-role --role-name ccg-scp-test-role \
 # 9 · IAM allow  (then delete)
 aws iam create-role --role-name ccg-scp-test-role \
   --assume-role-policy-document '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"ec2.amazonaws.com"},"Action":"sts:AssumeRole"}]}' \
-  --tags Key=owner,Value=alazar Key=environment,Value=sandbox Key=cost-center,Value=cc-1000 Key=data-classification,Value=internal
+  --tags Key=owner,Value=example-owner Key=environment,Value=sandbox Key=cost-center,Value=cc-1000 Key=data-classification,Value=internal
 aws iam delete-role --role-name ccg-scp-test-role
 ```
 

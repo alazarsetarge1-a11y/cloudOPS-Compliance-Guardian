@@ -43,7 +43,7 @@ reporting attributes spend through them.
   would fail *open* — a request with no tags has nothing to compare and slips
   through, silently enforcing nothing.
 - **Break-glass exemption (pinned to one account).** Every statement exempts the
-  single role `arn:aws:iam::419022575959:role/OrganizationBreakGlass` —
+  single role `arn:aws:iam::111111111111:role/OrganizationBreakGlass` —
   **pinned to the management account, not wildcarded** across accounts (`::*:`).
   Wildcarding the account would let a same-named role created in *any* member
   account inherit the bypass; pinning closes that. The role is a placeholder to
