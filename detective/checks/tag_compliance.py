@@ -8,6 +8,15 @@ fact. It's why "preventive + detective" beats either alone.
 
 Uses the Resource Groups Tagging API (`get_resources`), which returns taggable
 resources across services in one paginated call. It is regional, so we loop.
+
+KNOWN LIMITATION: `get_resources` surfaces resources that are tagged or were
+*previously* tagged, and its per-service coverage varies. A resource that has
+never been tagged may not appear at all — so this check reliably catches
+*under-tagged* resources but can miss a truly *never-tagged* asset (it would be
+compliant by omission). Comprehensive "does every resource have the required
+tags" coverage is exactly what the **AWS Config `required-tags` managed rule**
+provides (it evaluates resources directly), which is why this project runs Config
+alongside these Boto3 checks rather than relying on this one alone.
 """
 
 from __future__ import annotations

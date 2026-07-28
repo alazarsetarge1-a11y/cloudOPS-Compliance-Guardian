@@ -93,7 +93,11 @@ def _evaluate_user(iam, account: str, user: dict) -> Finding | None:
             )
         raise
 
-    has_mfa = bool(iam.list_mfa_devices(UserName=name)["MFADevices"])
+    # Paginate for consistency with the "always paginate" rule (a user can't
+    # actually exceed one page of MFA devices, but we don't special-case it).
+    has_mfa = any(
+        page["MFADevices"] for page in iam.get_paginator("list_mfa_devices").paginate(UserName=name)
+    )
     if has_mfa:
         return Finding(
             **base,

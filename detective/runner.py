@@ -47,7 +47,13 @@ CHECKS = [
 
 def run_all_checks(session: boto3.Session) -> list[Finding]:
     """Run every registered check against the session and combine the findings."""
-    account = account_id_of(session)
+    # Resolve the account id inside the resilience boundary: if STS itself is
+    # denied/unavailable, we still want the per-check ERROR findings below rather
+    # than crashing the whole scan with no machine-readable output.
+    try:
+        account = account_id_of(session)
+    except Exception:
+        account = "unknown"
     findings: list[Finding] = []
     for check in CHECKS:
         try:
@@ -129,8 +135,11 @@ def main(argv: list[str] | None = None) -> int:
     }
     json.dump(report, sys.stdout, indent=2, default=str)
     sys.stdout.write("\n")
-    # Non-zero exit when anything is non-compliant — lets this gate a pipeline.
-    return 1 if report["summary"]["by_status"]["NON_COMPLIANT"] else 0
+    # Non-zero exit when anything is non-compliant OR could not be evaluated.
+    # An ERROR (e.g. AccessDenied) must not produce a green gate — you can't
+    # claim "all clear" for a control you never actually looked at.
+    by_status = report["summary"]["by_status"]
+    return 1 if (by_status["NON_COMPLIANT"] or by_status["ERROR"]) else 0
 
 
 if __name__ == "__main__":
