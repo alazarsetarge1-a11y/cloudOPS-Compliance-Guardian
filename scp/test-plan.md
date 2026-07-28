@@ -30,7 +30,7 @@ the allow path is proven by the identical condition structure shared with EC2/S3
 ```bash
 export AWS_PROFILE=ccg   # management-account SSO
 CREDS=$(aws sts assume-role \
-  --role-arn arn:aws:iam::342524208863:role/OrganizationAccountAccessRole \
+  --role-arn arn:aws:iam::<MGMT_ACCOUNT_ID>:role/<MGMT_ACCOUNT_ID> \
   --role-session-name scp-test --query Credentials --output json)
 export AWS_ACCESS_KEY_ID=$(echo "$CREDS" | jq -r .AccessKeyId)
 export AWS_SECRET_ACCESS_KEY=$(echo "$CREDS" | jq -r .SecretAccessKey)
@@ -42,7 +42,7 @@ unset AWS_PROFILE   # now acting AS the member-account role
 
 **Run: 2026-07-25 — all cases PASS** (9 top-level cases + 2 EC2-volume subcases
 = **11 executions**) against policy `p-4nsaynd6` attached to OU
-`ou-dkh0-yrjl7roq`, from `OrganizationAccountAccessRole` in `342524208863`.
+`<MGMT_ACCOUNT_ID>`, from `OrganizationAccountAccessRole` in `<MGMT_ACCOUNT_ID>`.
 
 | # | Case | Expectation | Actual result |
 |---|---|---|---|
