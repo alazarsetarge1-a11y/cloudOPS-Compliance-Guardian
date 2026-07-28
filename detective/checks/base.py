@@ -81,3 +81,11 @@ class Finding:
 def account_id_of(session: boto3.Session) -> str:
     """Resolve the account id the session is operating in (one STS call)."""
     return session.client("sts", config=BOTO_CONFIG).get_caller_identity()["Account"]
+
+
+def enabled_regions(session: boto3.Session) -> list[str]:
+    """Regions enabled for this account. Regional checks must loop over these —
+    a security group open to the world in eu-west-1 is just as exposed as one in
+    us-east-1, and scanning a single region would silently miss it."""
+    ec2 = session.client("ec2", region_name="us-east-1", config=BOTO_CONFIG)
+    return [r["RegionName"] for r in ec2.describe_regions()["Regions"]]
