@@ -27,4 +27,12 @@ variable "required_tags" {
   type        = list(string)
   default     = ["owner", "environment", "cost-center", "data-classification"]
   description = "Tag keys the required-tags Config rule enforces — mirrors the preventive SCP."
+
+  # The REQUIRED_TAGS managed rule takes exactly four keys, and rules.tf indexes
+  # [0..3], so an override with a different count would fail at plan time with an
+  # opaque index error. Fail fast with a clear message instead.
+  validation {
+    condition     = length(var.required_tags) == 4
+    error_message = "required_tags must contain exactly four tag keys."
+  }
 }

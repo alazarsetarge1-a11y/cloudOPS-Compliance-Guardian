@@ -176,7 +176,9 @@ jobs:
       - uses: hashicorp/setup-terraform@v3
         if: steps.check.outputs.found == 'true'
 
-      - uses: actions/setup-python@v6
+      # Pinned to a commit SHA (v7.0.0) — a moving @v7 tag could change the code
+      # running in CI with no diff (supply-chain risk).
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         if: steps.check.outputs.found == 'true'
         with:
           python-version: "3.12"
@@ -189,12 +191,14 @@ jobs:
         if: steps.check.outputs.found == 'true'
         run: |
           # Modules can be nested (e.g. infra/config/), so validate EVERY dir
-          # under infra/ that contains .tf — not just infra/ itself.
-          for dir in $(find infra -name '*.tf' -exec dirname {} \; | sort -u); do
+          # under infra/ that contains .tf — not just infra/ itself. Read via a
+          # process substitution + null-safe loop so paths with spaces/globs and
+          # any validate failure propagate correctly.
+          while IFS= read -r dir; do
             echo "== validate $dir =="
             terraform -chdir="$dir" init -backend=false
             terraform -chdir="$dir" validate
-          done
+          done < <(find infra -name '*.tf' -exec dirname {} \; | sort -u)
 
       - name: Checkov IaC security scan
         if: steps.check.outputs.found == 'true'

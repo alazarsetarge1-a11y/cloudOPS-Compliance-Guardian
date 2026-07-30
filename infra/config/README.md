@@ -1,8 +1,18 @@
 # AWS Config — detective layer (Terraform)
 
 Enables AWS Config in the **member account** and deploys managed rules that mirror
-the Boto3 checks in `detective/`, one-for-one. Config evaluates these continuously
-and event-driven (on resource change), complementing the point-in-time Boto3 scans.
+the Boto3 checks in `detective/`, one-for-one. Config evaluates rules on resource
+change (event-driven) and, for some, on a periodic schedule — `iam-user-mfa-enabled`
+and `root-account-mfa-enabled` are periodic — complementing the point-in-time
+Boto3 scans.
+
+## Scope
+
+This stack records **one region** (`var.region`, default `us-east-1`). AWS Config
+is regional: `all_supported` covers every resource type *within that region*, not
+the whole account. Full multi-region coverage would need a recorder + delivery
+channel per region (or a Config aggregator) — out of scope for this sandbox, which
+only uses us-east-1.
 
 | Boto3 check (`detective/`) | AWS Config managed rule |
 |---|---|

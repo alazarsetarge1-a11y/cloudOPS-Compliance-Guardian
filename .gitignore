@@ -14,9 +14,10 @@ build/
 .terraform/
 *.tfstate
 *.tfstate.backup
-# terraform.tfvars holds the real member account id — never commit it.
+# terraform.tfvars(.json) holds the real member account id — never commit it.
 # The committed *.tfvars.example carries only a placeholder.
 *.tfvars
+*.tfvars.json
 !*.tfvars.example
 # NOTE: .terraform.lock.hcl is intentionally NOT ignored — commit it so provider
 # versions/checksums are pinned and reproducible across machines and CI.

@@ -93,7 +93,30 @@ data "aws_iam_policy_document" "config_bucket" {
 
 resource "aws_s3_bucket_policy" "config" {
   bucket = aws_s3_bucket.config.id
-  policy = data.aws_iam_policy_document.config_bucket.json
+  policy = data.aws_iam_policy_document.config_bucket_tls.json
+}
+
+# Deny any access to the bucket that isn't over TLS. A bucket-policy Deny is the
+# right place: it overrides any future identity-policy Allow. AWS service calls
+# (Config) already use HTTPS, so they're unaffected.
+data "aws_iam_policy_document" "config_bucket_tls" {
+  source_policy_documents = [data.aws_iam_policy_document.config_bucket.json]
+
+  statement {
+    sid       = "DenyInsecureTransport"
+    effect    = "Deny"
+    actions   = ["s3:*"]
+    resources = [aws_s3_bucket.config.arn, "${aws_s3_bucket.config.arn}/*"]
+    principals {
+      type        = "*"
+      identifiers = ["*"]
+    }
+    condition {
+      test     = "Bool"
+      variable = "aws:SecureTransport"
+      values   = ["false"]
+    }
+  }
 }
 
 # ---------------------------------------------------------------------------
