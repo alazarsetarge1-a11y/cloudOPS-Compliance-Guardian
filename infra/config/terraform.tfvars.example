@@ -1,0 +1,7 @@
+# Copy this file to `terraform.tfvars` (which is gitignored) and set your real
+# member account id. terraform.tfvars is read automatically by `terraform plan/apply`.
+#
+#   cp terraform.tfvars.example terraform.tfvars
+#   # then edit terraform.tfvars with the real 12-digit account id
+
+member_account_id = "222222222222" # placeholder — your scp-testing member account
