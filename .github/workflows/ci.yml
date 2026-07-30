@@ -194,11 +194,11 @@ jobs:
           # under infra/ that contains .tf — not just infra/ itself. Read via a
           # process substitution + null-safe loop so paths with spaces/globs and
           # any validate failure propagate correctly.
-          while IFS= read -r dir; do
+          while IFS= read -r -d '' dir; do
             echo "== validate $dir =="
             terraform -chdir="$dir" init -backend=false
             terraform -chdir="$dir" validate
-          done < <(find infra -name '*.tf' -exec dirname {} \; | sort -u)
+          done < <(find infra -name '*.tf' -printf '%h\0' | sort -z -u)
 
       - name: Checkov IaC security scan
         if: steps.check.outputs.found == 'true'

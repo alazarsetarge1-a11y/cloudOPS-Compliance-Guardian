@@ -116,6 +116,14 @@ data "aws_iam_policy_document" "config_bucket_tls" {
       variable = "aws:SecureTransport"
       values   = ["false"]
     }
+    # Exempt AWS service principals (e.g. Config delivery). AWS can redact the
+    # SecureTransport key on service-to-service calls, so without this a valid
+    # HTTPS Config write could be caught by the deny.
+    condition {
+      test     = "Bool"
+      variable = "aws:PrincipalIsAWSService"
+      values   = ["false"]
+    }
   }
 }
 

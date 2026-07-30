@@ -32,7 +32,11 @@ variable "required_tags" {
   # [0..3], so an override with a different count would fail at plan time with an
   # opaque index error. Fail fast with a clear message instead.
   validation {
-    condition     = length(var.required_tags) == 4
-    error_message = "required_tags must contain exactly four tag keys."
+    condition = (
+      length(var.required_tags) == 4 &&
+      alltrue([for tag in var.required_tags : trimspace(tag) == tag && tag != ""]) &&
+      length(toset(var.required_tags)) == 4
+    )
+    error_message = "required_tags must be exactly four non-empty, unique, untrimmed tag keys."
   }
 }
