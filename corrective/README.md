@@ -37,12 +37,13 @@ corrective/
   base.py                       # Action / Outcome / RemediationResult + the gate contract
   registry.py                   # check_id -> (Action, handler) — the closed allowlist
   remediator.py                 # remediate(): the gated dispatcher (guards ERROR/COMPLIANT/unknown)
+  reconcile.py                  # reconcile(): STARTED -> REMEDIATED/FAILED from SSM terminal status
   remediations/
     notify.py                   # the 3 notify-and-track checks
     s3_public_access.py         # starts the S3 SSM runbook on apply
     security_groups.py          # starts the SG SSM runbook on apply
   runbooks/
-    remediate-s3-public-access.yaml   # SSM doc: re-enable BPA (executeAwsApi)
+    remediate-s3-public-access.yaml   # SSM doc: enable BPA, records changed flags (executeScript)
     remediate-security-groups.yaml    # SSM doc: revoke world-open ingress (executeScript, guarded)
   tests/                        # offline, Stubber-based
 

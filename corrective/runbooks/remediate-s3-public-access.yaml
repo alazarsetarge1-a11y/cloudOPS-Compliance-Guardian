@@ -6,19 +6,20 @@
 # Terraform's dollar-brace interpolation, so the two coexist cleanly.
 #
 # What it does: re-enables ALL FOUR S3 Block Public Access settings on the one
-# bucket the check flagged.
+# bucket the check flagged, and records exactly WHICH flags it changed.
 #
-# Why there is NO pre-mutation "is it still non-compliant?" guard (the runbook
-# checklist asks for one): PutPublicAccessBlock to all-true is IDEMPOTENT and
-# MONOTONIC-SECURE — it can only make a bucket *more* private, never less.
-# Re-running it on an already-blocked bucket changes nothing and cannot cause
-# harm, so a staleness guard would add a failure mode without adding safety.
-# Instead we verify AFTER (VerifyBlocked). Contrast the security-group runbook,
-# where the mutation is destructive and a pre-guard genuinely matters.
+# It uses a single aws:executeScript that reads-before-write, so it can report an
+# accurate `changed_flags` list (an already-compliant bucket returns [] rather
+# than looking identical to a freshly-remediated one). PutPublicAccessBlock to
+# all-true is IDEMPOTENT and MONOTONIC-SECURE — it can only make a bucket *more*
+# private — so we skip the Put entirely when nothing needs changing, then verify
+# all four flags before ending. Contrast the security-group runbook, where the
+# mutation is destructive and a pre-guard matters more.
 schemaVersion: '0.3'
 description: >-
   Re-enable S3 Block Public Access (all four settings) on a bucket flagged by the
-  ccg detective s3-public-access check. Idempotent and strictly security-improving.
+  ccg detective s3-public-access check. Idempotent, strictly security-improving,
+  and records which flags it changed.
 assumeRole: '${automation_role_arn}'
 parameters:
   BucketName:
@@ -29,45 +30,53 @@ parameters:
     # malformed or injected value from ever reaching the API call.
     allowedPattern: '^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$'
 mainSteps:
-  - name: BlockPublicAccess
-    action: aws:executeAwsApi
-    description: Set all four bucket-level Block Public Access flags to true.
-    inputs:
-      Service: s3
-      Api: PutPublicAccessBlock
-      Bucket: '{{ BucketName }}'
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        IgnorePublicAcls: true
-        BlockPublicPolicy: true
-        RestrictPublicBuckets: true
-  - name: VerifyAllBlocked
+  - name: BlockPublicAccessAndVerify
     action: aws:executeScript
-    description: Self-verify — confirm ALL FOUR Block Public Access flags are true.
+    description: Read current BPA, set any missing flags, verify all four, report changes.
     isEnd: true
     inputs:
       Runtime: python3.11
-      Handler: verify
+      Handler: remediate
       InputPayload:
         BucketName: '{{ BucketName }}'
       Script: |-
         import boto3
+        from botocore.exceptions import ClientError
 
         FLAGS = ["BlockPublicAcls", "IgnorePublicAcls", "BlockPublicPolicy", "RestrictPublicBuckets"]
 
-        def verify(events, context):
+        def _current(s3, bucket):
+            try:
+                cfg = s3.get_public_access_block(Bucket=bucket)["PublicAccessBlockConfiguration"]
+                return {f: cfg.get(f, False) for f in FLAGS}
+            except ClientError as e:
+                # No configuration at all == every flag effectively off.
+                if e.response["Error"]["Code"] == "NoSuchPublicAccessBlockConfiguration":
+                    return dict.fromkeys(FLAGS, False)
+                raise
+
+        def remediate(events, context):
             s3 = boto3.client("s3")
-            cfg = s3.get_public_access_block(
-                Bucket=events["BucketName"]
-            )["PublicAccessBlockConfiguration"]
-            still_off = [f for f in FLAGS if not cfg.get(f, False)]
+            bucket = events["BucketName"]
+
+            before = _current(s3, bucket)
+            changed = [f for f in FLAGS if not before[f]]
+
+            # Only mutate if something is actually off (keeps history honest and
+            # avoids a needless write on an already-compliant bucket).
+            if changed:
+                s3.put_public_access_block(
+                    Bucket=bucket,
+                    PublicAccessBlockConfiguration=dict.fromkeys(FLAGS, True),
+                )
+
+            # Verify ALL four afterward — one flag left false still allows exposure.
+            still_off = [f for f in FLAGS if not _current(s3, bucket)[f]]
             if still_off:
-                # Fail the runbook: a single flag left false still allows exposure,
-                # so we must not report success. asserting one flag (the old
-                # behavior) could pass while others stayed disabled.
                 raise Exception(f"Block Public Access still disabled for: {still_off}")
-            return {"blocked": FLAGS}
+
+            return {"changed_flags": changed, "already_compliant": not changed}
     outputs:
-      - Name: blocked
-        Selector: $.Payload.blocked
+      - Name: changed_flags
+        Selector: $.Payload.changed_flags
         Type: StringList
