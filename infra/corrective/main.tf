@@ -77,3 +77,48 @@ resource "aws_ssm_document" "s3_public_access" {
     automation_role_arn = aws_iam_role.automation.arn
   })
 }
+
+# ---------------------------------------------------------------------------
+# Security-group remediation: its OWN least-privilege role (each runbook gets a
+# role scoped to exactly what it needs — the S3 role can't touch EC2, and this
+# one can't touch S3). Reuses the shared ssm.amazonaws.com trust policy above.
+# ---------------------------------------------------------------------------
+resource "aws_iam_role" "sg_automation" {
+  name               = "ccg-remediation-sg-role"
+  assume_role_policy = data.aws_iam_policy_document.automation_assume.json
+}
+
+data "aws_iam_policy_document" "sg_permissions" {
+  # The mutating action, scoped to security groups in THIS account. Revoke only
+  # removes ingress rules — it cannot grant access — and the runbook is surgical
+  # about which rules it touches.
+  statement {
+    sid       = "RevokeIngress"
+    effect    = "Allow"
+    actions   = ["ec2:RevokeSecurityGroupIngress"]
+    resources = ["arn:aws:ec2:*:${data.aws_caller_identity.current.account_id}:security-group/*"]
+  }
+  # Read-only, needed for the runbook's guard (re-describe before revoking).
+  # DescribeSecurityGroups has no resource-level scoping, so it must be "*".
+  statement {
+    sid       = "DescribeForGuard"
+    effect    = "Allow"
+    actions   = ["ec2:DescribeSecurityGroups"]
+    resources = ["*"]
+  }
+}
+
+resource "aws_iam_role_policy" "sg_automation" {
+  name   = "ccg-remediation-sg-policy"
+  role   = aws_iam_role.sg_automation.id
+  policy = data.aws_iam_policy_document.sg_permissions.json
+}
+
+resource "aws_ssm_document" "security_groups" {
+  name            = "ccg-remediate-security-groups"
+  document_type   = "Automation"
+  document_format = "YAML"
+  content = templatefile("${path.module}/../../corrective/runbooks/remediate-security-groups.yaml", {
+    automation_role_arn = aws_iam_role.sg_automation.arn
+  })
+}

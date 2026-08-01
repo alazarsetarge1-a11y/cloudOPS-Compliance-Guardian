@@ -1,0 +1,98 @@
+# SSM Automation runbook — remediation for the detective `security-groups` check.
+#
+# Rendered by infra/corrective/ (templatefile injects the scoped role ARN).
+#
+# What it does: revokes world-open ingress (0.0.0.0/0 or ::/0) on sensitive ports
+# (22, 3389) or all-traffic (-1) from ONE security group.
+#
+# Unlike the S3 runbook, this mutation is DESTRUCTIVE (it removes rules), so it is:
+#   * GUARDED  — it re-describes the live group and acts only on what is STILL
+#     world-open, so a finding that went stale between detection and remediation
+#     revokes nothing.
+#   * SURGICAL — for each offending rule it removes only the world-open CIDR(s)
+#     for the sensitive port range, leaving any legitimate (e.g. internal-CIDR)
+#     access on the same rule intact. It never deletes the group or all ingress.
+#   * IDEMPOTENT — re-running on an already-clean group revokes nothing and
+#     succeeds.
+#
+# It uses aws:executeScript (inline Python) rather than aws:executeAwsApi because
+# the set of rules to revoke is dynamic and requires the guard logic above.
+schemaVersion: '0.3'
+description: >-
+  Revoke world-open ingress (0.0.0.0/0, ::/0) on sensitive ports (22, 3389) or
+  all-traffic from a security group flagged by the ccg security-groups check.
+  Guarded, surgical, idempotent.
+assumeRole: '${automation_role_arn}'
+parameters:
+  GroupId:
+    type: String
+    description: The security group id (sg-...) to remediate.
+    allowedPattern: '^sg-[0-9a-f]{8,17}$'
+  Region:
+    type: String
+    description: The region the security group lives in (security groups are regional).
+    allowedPattern: '^[a-z]{2}-[a-z]+-[0-9]$'
+mainSteps:
+  - name: RevokeWorldOpenIngress
+    action: aws:executeScript
+    isEnd: true
+    description: Re-check the live group and revoke only the world-open sensitive ingress.
+    inputs:
+      Runtime: python3.11
+      Handler: revoke_world_open
+      InputPayload:
+        GroupId: '{{ GroupId }}'
+        Region: '{{ Region }}'
+      Script: |-
+        import boto3
+
+        SENSITIVE = {22, 3389}
+        OPEN_V4, OPEN_V6 = "0.0.0.0/0", "::/0"
+
+        def revoke_world_open(events, context):
+            sg_id = events["GroupId"]
+            ec2 = boto3.client("ec2", region_name=events["Region"])
+
+            # GUARD: re-describe the live group; the finding may be stale.
+            groups = ec2.describe_security_groups(GroupIds=[sg_id])["SecurityGroups"]
+            if not groups:
+                return {"revoked": [], "note": "security group no longer exists"}
+            sg = groups[0]
+
+            to_revoke = []
+            for perm in sg.get("IpPermissions", []):
+                proto = perm.get("IpProtocol")
+                v4 = [r for r in perm.get("IpRanges", []) if r.get("CidrIp") == OPEN_V4]
+                v6 = [r for r in perm.get("Ipv6Ranges", []) if r.get("CidrIpv6") == OPEN_V6]
+                if not v4 and not v6:
+                    continue  # not world-open — leave it
+
+                all_traffic = proto == "-1"
+                fp, tp = perm.get("FromPort"), perm.get("ToPort")
+                hits_sensitive = all_traffic or (
+                    fp is not None and tp is not None
+                    and any(fp <= p <= tp for p in SENSITIVE)
+                )
+                if not hits_sensitive:
+                    continue  # world-open but not on a sensitive port — out of scope
+
+                # SURGICAL: revoke only the world-open ranges of this rule.
+                entry = {"IpProtocol": proto}
+                if not all_traffic:
+                    entry["FromPort"] = fp
+                    entry["ToPort"] = tp
+                if v4:
+                    entry["IpRanges"] = [{"CidrIp": OPEN_V4}]
+                if v6:
+                    entry["Ipv6Ranges"] = [{"CidrIpv6": OPEN_V6}]
+                to_revoke.append(entry)
+
+            if not to_revoke:
+                return {"revoked": [], "note": "nothing world-open remained (guard held)"}
+
+            ec2.revoke_security_group_ingress(GroupId=sg_id, IpPermissions=to_revoke)
+            return {"revoked": to_revoke}
+    outputs:
+      - Name: revoked
+        Selector: $.Payload.revoked
+        Type: MapList

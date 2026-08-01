@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from corrective.base import Action, RemediationResult
 from corrective.remediations.notify import notify
 from corrective.remediations.s3_public_access import remediate_s3_public_access
+from corrective.remediations.security_groups import remediate_security_groups
 
 # A handler is a transport-agnostic pure function; apply is keyword-only so it
 # can never be passed True positionally by accident.
@@ -35,5 +36,5 @@ REGISTRY: dict[str, RemediationSpec] = {
     "tag-compliance": RemediationSpec(Action.NOTIFY, notify),
     # --- Auto-remediable: SSM-backed handlers ---
     "s3-public-access": RemediationSpec(Action.AUTO_REMEDIATE, remediate_s3_public_access),
-    # "security-groups": RemediationSpec(Action.AUTO_REMEDIATE, remediate_open_sg),  # next piece
+    "security-groups": RemediationSpec(Action.AUTO_REMEDIATE, remediate_security_groups),
 }
