@@ -1,0 +1,56 @@
+# SSM Automation runbook — remediation for the detective `s3-public-access` check.
+#
+# This file is a Terraform template: infra/corrective/ renders it with
+# `templatefile`, injecting the scoped automation role ARN into `assumeRole`.
+# SSM's own parameter syntax uses double braces, which does NOT collide with
+# Terraform's dollar-brace interpolation, so the two coexist cleanly.
+#
+# What it does: re-enables ALL FOUR S3 Block Public Access settings on the one
+# bucket the check flagged.
+#
+# Why there is NO pre-mutation "is it still non-compliant?" guard (the runbook
+# checklist asks for one): PutPublicAccessBlock to all-true is IDEMPOTENT and
+# MONOTONIC-SECURE — it can only make a bucket *more* private, never less.
+# Re-running it on an already-blocked bucket changes nothing and cannot cause
+# harm, so a staleness guard would add a failure mode without adding safety.
+# Instead we verify AFTER (VerifyBlocked). Contrast the security-group runbook,
+# where the mutation is destructive and a pre-guard genuinely matters.
+schemaVersion: '0.3'
+description: >-
+  Re-enable S3 Block Public Access (all four settings) on a bucket flagged by the
+  ccg detective s3-public-access check. Idempotent and strictly security-improving.
+assumeRole: '${automation_role_arn}'
+parameters:
+  BucketName:
+    type: String
+    description: The S3 bucket to re-block public access on.
+    # S3 bucket naming rules: 3–63 chars, lowercase letters/digits/dots/hyphens,
+    # starting and ending alphanumeric. Constraining the input here stops a
+    # malformed or injected value from ever reaching the API call.
+    allowedPattern: '^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$'
+mainSteps:
+  - name: BlockPublicAccess
+    action: aws:executeAwsApi
+    description: Set all four bucket-level Block Public Access flags to true.
+    inputs:
+      Service: s3
+      Api: PutPublicAccessBlock
+      Bucket: '{{ BucketName }}'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+  - name: VerifyBlocked
+    action: aws:assertAwsResourceProperty
+    description: Self-verify — confirm the restrictive block is now in effect.
+    isEnd: true
+    inputs:
+      Service: s3
+      Api: GetPublicAccessBlock
+      Bucket: '{{ BucketName }}'
+      PropertySelector: '$.PublicAccessBlockConfiguration.RestrictPublicBuckets'
+      # SSM stringifies the boolean API output capitalized ("True"/"False"), so
+      # the desired value must be "True" — lowercase "true" never matches.
+      DesiredValues:
+        - 'True'
