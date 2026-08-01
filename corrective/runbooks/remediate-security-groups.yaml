@@ -1,0 +1,131 @@
+# SSM Automation runbook — remediation for the detective `security-groups` check.
+#
+# Rendered by infra/corrective/ (templatefile injects the scoped role ARN).
+#
+# What it does: revokes world-open ingress (0.0.0.0/0 or ::/0) from ONE security
+# group, but ONLY for NARROW sensitive-port rules (tcp/22, tcp/3389 where
+# FromPort == ToPort).
+#
+# Unlike the S3 runbook, this mutation is DESTRUCTIVE (it removes rules), so it is:
+#   * GUARDED   — it re-describes the live group and confirms the group's owner is
+#     this account before acting; a finding that went stale revokes nothing.
+#   * NARROW    — a world-open BROAD range (e.g. tcp/1-65535) that merely CONTAINS
+#     22 is NOT auto-revoked: EC2 requires the port range to match, so revoking it
+#     would also drop 80/443 and cause an outage. Broad ranges and all-traffic (-1)
+#     are returned as `skipped_manual` for a human to handle.
+#   * SURGICAL  — for a narrow rule it removes only the world-open CIDR(s), leaving
+#     any legitimate (e.g. internal-CIDR) access on the same rule intact. It never
+#     deletes the group or all ingress.
+#   * IDEMPOTENT / RETRY-SAFE — re-running on an already-clean group revokes
+#     nothing and succeeds; concurrent deletes/rule-changes are treated as done.
+#
+# It uses aws:executeScript (inline Python) rather than aws:executeAwsApi because
+# the set of rules to revoke is dynamic and requires the guard logic above.
+schemaVersion: '0.3'
+description: >-
+  Revoke world-open (0.0.0.0/0, ::/0) ingress on NARROW sensitive-port rules
+  (tcp/22, tcp/3389) from a security group flagged by the ccg security-groups
+  check. Guarded, surgical, idempotent; broad/all-traffic rules are left for
+  manual review.
+assumeRole: '${automation_role_arn}'
+parameters:
+  GroupId:
+    type: String
+    description: The security group id (sg-...) to remediate.
+    allowedPattern: '^sg-[0-9a-f]{8,17}$'
+  Region:
+    type: String
+    description: The region the security group lives in (security groups are regional).
+    allowedPattern: '^[a-z]{2}-[a-z]+-[0-9]$'
+mainSteps:
+  - name: RevokeWorldOpenIngress
+    action: aws:executeScript
+    isEnd: true
+    description: Re-check the live group and revoke only narrow world-open sensitive ingress.
+    inputs:
+      Runtime: python3.11
+      Handler: revoke_world_open
+      InputPayload:
+        GroupId: '{{ GroupId }}'
+        Region: '{{ Region }}'
+      Script: |-
+        import boto3
+        from botocore.exceptions import ClientError
+
+        SENSITIVE = {22, 3389}
+        OPEN_V4, OPEN_V6 = "0.0.0.0/0", "::/0"
+
+        def _narrow_sensitive(proto, fp, tp):
+            # Only a rule whose range is EXACTLY one sensitive TCP port. A broad
+            # range that merely CONTAINS 22/3389 must not be revoked wholesale —
+            # EC2 matches on the port range, so it would also drop other ports.
+            return proto == "tcp" and fp is not None and fp == tp and fp in SENSITIVE
+
+        def revoke_world_open(events, context):
+            sg_id = events["GroupId"]
+            ec2 = boto3.client("ec2", region_name=events["Region"])
+
+            # GUARD: re-describe the live group; the finding may be stale, or the
+            # group may have been deleted concurrently (a no-op success).
+            try:
+                groups = ec2.describe_security_groups(GroupIds=[sg_id])["SecurityGroups"]
+            except ClientError as e:
+                if e.response["Error"]["Code"] == "InvalidGroup.NotFound":
+                    return {"revoked": [], "skipped_manual": [], "note": "group no longer exists"}
+                raise
+            if not groups:
+                return {"revoked": [], "skipped_manual": [], "note": "group no longer exists"}
+            sg = groups[0]
+
+            # OWNERSHIP GUARD: only ever touch a group owned by the automation
+            # account — a scope check inside the runbook, on top of the IAM role's
+            # account-scoped resource ARN.
+            account = boto3.client("sts").get_caller_identity()["Account"]
+            if sg.get("OwnerId") != account:
+                return {"revoked": [], "skipped_manual": [],
+                        "note": f"out-of-scope owner {sg.get('OwnerId')}"}
+
+            to_revoke, skipped_manual = [], []
+            for perm in sg.get("IpPermissions", []):
+                proto = perm.get("IpProtocol")
+                v4 = [r for r in perm.get("IpRanges", []) if r.get("CidrIp") == OPEN_V4]
+                v6 = [r for r in perm.get("Ipv6Ranges", []) if r.get("CidrIpv6") == OPEN_V6]
+                if not v4 and not v6:
+                    continue  # not world-open — leave it
+
+                fp, tp = perm.get("FromPort"), perm.get("ToPort")
+                if not _narrow_sensitive(proto, fp, tp):
+                    # World-open but broad or all-traffic — too risky to auto-revoke.
+                    skipped_manual.append({"IpProtocol": proto, "FromPort": fp, "ToPort": tp})
+                    continue
+
+                # SURGICAL: revoke only the world-open ranges of this narrow rule.
+                entry = {"IpProtocol": proto, "FromPort": fp, "ToPort": tp}
+                if v4:
+                    entry["IpRanges"] = [{"CidrIp": OPEN_V4}]
+                if v6:
+                    entry["Ipv6Ranges"] = [{"CidrIpv6": OPEN_V6}]
+                to_revoke.append(entry)
+
+            if not to_revoke:
+                return {"revoked": [], "skipped_manual": skipped_manual,
+                        "note": "no narrow world-open sensitive rules to revoke"}
+
+            try:
+                ec2.revoke_security_group_ingress(GroupId=sg_id, IpPermissions=to_revoke)
+            except ClientError as e:
+                # A rule changed between describe and revoke — treat already-absent
+                # rules as done rather than failing the runbook (retry-safe).
+                if e.response["Error"]["Code"] == "InvalidPermission.NotFound":
+                    return {"revoked": to_revoke, "skipped_manual": skipped_manual,
+                            "note": "some rules already absent (concurrent change)"}
+                raise
+
+            return {"revoked": to_revoke, "skipped_manual": skipped_manual}
+    outputs:
+      - Name: revoked
+        Selector: $.Payload.revoked
+        Type: MapList
+      - Name: skipped_manual
+        Selector: $.Payload.skipped_manual
+        Type: MapList

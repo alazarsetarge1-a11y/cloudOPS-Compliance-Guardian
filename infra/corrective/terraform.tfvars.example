@@ -1,0 +1,3 @@
+# Copy to terraform.tfvars (gitignored) and set your real 12-digit member account id.
+# The example carries only a placeholder — never commit the real value.
+member_account_id = "222222222222"
