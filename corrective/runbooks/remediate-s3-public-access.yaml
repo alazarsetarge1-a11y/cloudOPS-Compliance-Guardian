@@ -41,16 +41,33 @@ mainSteps:
         IgnorePublicAcls: true
         BlockPublicPolicy: true
         RestrictPublicBuckets: true
-  - name: VerifyBlocked
-    action: aws:assertAwsResourceProperty
-    description: Self-verify — confirm the restrictive block is now in effect.
+  - name: VerifyAllBlocked
+    action: aws:executeScript
+    description: Self-verify — confirm ALL FOUR Block Public Access flags are true.
     isEnd: true
     inputs:
-      Service: s3
-      Api: GetPublicAccessBlock
-      Bucket: '{{ BucketName }}'
-      PropertySelector: '$.PublicAccessBlockConfiguration.RestrictPublicBuckets'
-      # SSM stringifies the boolean API output capitalized ("True"/"False"), so
-      # the desired value must be "True" — lowercase "true" never matches.
-      DesiredValues:
-        - 'True'
+      Runtime: python3.11
+      Handler: verify
+      InputPayload:
+        BucketName: '{{ BucketName }}'
+      Script: |-
+        import boto3
+
+        FLAGS = ["BlockPublicAcls", "IgnorePublicAcls", "BlockPublicPolicy", "RestrictPublicBuckets"]
+
+        def verify(events, context):
+            s3 = boto3.client("s3")
+            cfg = s3.get_public_access_block(
+                Bucket=events["BucketName"]
+            )["PublicAccessBlockConfiguration"]
+            still_off = [f for f in FLAGS if not cfg.get(f, False)]
+            if still_off:
+                # Fail the runbook: a single flag left false still allows exposure,
+                # so we must not report success. asserting one flag (the old
+                # behavior) could pass while others stayed disabled.
+                raise Exception(f"Block Public Access still disabled for: {still_off}")
+            return {"blocked": FLAGS}
+    outputs:
+      - Name: blocked
+        Selector: $.Payload.blocked
+        Type: StringList

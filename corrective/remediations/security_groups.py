@@ -22,7 +22,13 @@ from __future__ import annotations
 import boto3
 from botocore.exceptions import ClientError
 
-from corrective.base import BOTO_CONFIG, Action, Outcome, RemediationResult
+from corrective.base import (
+    BOTO_CONFIG,
+    Action,
+    Outcome,
+    RemediationResult,
+    remediation_region,
+)
 from detective.checks.base import Finding
 
 # MUST match aws_ssm_document.security_groups.name in infra/corrective/main.tf.
@@ -34,15 +40,30 @@ def remediate_security_groups(
 ) -> RemediationResult:
     sg_id = finding.resource_id
     region = finding.region  # security groups are regional — use the group's region
+    deployed = remediation_region()
     plan = {
         "runbook": RUNBOOK_NAME,
-        "api": "ec2:RevokeSecurityGroupIngress",
-        "params": {
-            "GroupId": sg_id,
-            "Region": region,
-            "scope": "world-open ingress on sensitive ports only",
-        },
+        "region": region,
+        "ssm_parameters": {"GroupId": sg_id, "Region": region},
+        "effect": "revoke world-open ingress on sensitive ports (narrow rules only)",
     }
+
+    # Scope guard: the detective check scans every enabled region, but the runbook
+    # is deployed only in `deployed`. Rather than fire a StartAutomationExecution
+    # that would fail with AutomationDefinitionNotFoundException, return a clean,
+    # non-mutating result that records honestly why nothing happened.
+    if region != deployed:
+        return RemediationResult(
+            check_id=finding.check_id,
+            resource_id=sg_id,
+            action=Action.AUTO_REMEDIATE,
+            outcome=Outcome.SKIPPED,
+            summary=(
+                f"Skipped — '{sg_id}' is in {region}, but the remediation runbook is "
+                f"deployed only in {deployed}. Deploy infra/corrective there to remediate it."
+            ),
+            plan={**plan, "deployed_region": deployed},
+        )
 
     if not apply:
         return RemediationResult(
@@ -71,12 +92,15 @@ def remediate_security_groups(
             plan={**plan, "error": code},
         )
 
+    # STARTED, not REMEDIATED — see s3_public_access for the rationale. Especially
+    # important here: the runbook may skip broad/all-traffic rules as manual, so
+    # "started" never implies "fully remediated" until the execution is reconciled.
     exec_id = resp["AutomationExecutionId"]
     return RemediationResult(
         check_id=finding.check_id,
         resource_id=sg_id,
         action=Action.AUTO_REMEDIATE,
-        outcome=Outcome.REMEDIATED,
-        summary=f"Started SSM runbook {RUNBOOK_NAME} on '{sg_id}' ({region}) (execution {exec_id}).",
+        outcome=Outcome.STARTED,
+        summary=f"Started SSM runbook {RUNBOOK_NAME} on '{sg_id}' ({region}) (execution {exec_id}); poll for terminal status.",
         plan={**plan, "execution_id": exec_id},
     )

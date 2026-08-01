@@ -19,6 +19,7 @@ for free — neither can accidentally skip it.
 
 from __future__ import annotations
 
+import os
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -28,6 +29,15 @@ from botocore.config import Config
 
 # Same reused, throttling-aware client config the detective layer uses.
 BOTO_CONFIG = Config(retries={"max_attempts": 10, "mode": "adaptive"})
+
+
+# The region the corrective runbooks + roles are deployed in. Configurable so a
+# deployment that sets `-var region=...` in infra/corrective can point the
+# handlers at the same region, instead of a source-hardcoded value. Defaults to
+# the project's documented single-region scope. Handlers use this (not a literal)
+# to decide where to start SSM Automation and whether a finding is in scope.
+def remediation_region() -> str:
+    return os.environ.get("CCG_REMEDIATION_REGION", "us-east-1")
 
 
 class Action(StrEnum):
@@ -48,9 +58,10 @@ class Outcome(StrEnum):
     Action is AUTO_REMEDIATE still yields Outcome PLANNED on a dry run."""
 
     PLANNED = "PLANNED"  # dry run — this is what an apply=True call would do
-    REMEDIATED = "REMEDIATED"  # apply=True — the fix was executed/started
+    STARTED = "STARTED"  # apply=True — SSM execution accepted; terminal state not yet known
+    REMEDIATED = "REMEDIATED"  # confirmed terminal success (set only after reconciliation)
     NOTIFIED = "NOTIFIED"  # apply=True — a human was flagged (no auto-fix)
-    SKIPPED = "SKIPPED"  # nothing to do (finding not NON_COMPLIANT)
+    SKIPPED = "SKIPPED"  # nothing to do (not NON_COMPLIANT, or out of remediation scope)
     FAILED = "FAILED"  # a fix was attempted but the AWS call errored
 
 

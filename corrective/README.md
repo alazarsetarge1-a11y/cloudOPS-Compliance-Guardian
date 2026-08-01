@@ -25,7 +25,7 @@ rest are flagged, honestly, rather than faked.
 | `check_id` | Action | How |
 |---|---|---|
 | `s3-public-access` | AUTO_REMEDIATE ✅ | SSM runbook re-enables Block Public Access (idempotent, monotonic-secure) |
-| `security-groups` | AUTO_REMEDIATE ✅ | SSM runbook (executeScript) revokes only the world-open ingress on sensitive ports — guarded + surgical |
+| `security-groups` | AUTO_REMEDIATE ✅ | SSM runbook (executeScript) revokes world-open ingress on **narrow** sensitive-port rules (tcp/22, tcp/3389); broad ranges and all-traffic are left for manual review to avoid outages — guarded + surgical |
 | `rds-encryption` | NOTIFY | Encryption at rest can't be toggled on a live instance — flag a human |
 | `iam-mfa` | NOTIFY | Can't enroll another principal's MFA device — flag a human |
 | `tag-compliance` | NOTIFY | The missing tag *values* can't be inferred — flag a human |

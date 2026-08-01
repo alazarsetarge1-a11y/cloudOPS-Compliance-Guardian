@@ -41,6 +41,15 @@ def test_compliant_is_skipped():
     assert res.outcome is Outcome.SKIPPED
 
 
+def test_skipped_result_reports_the_checks_true_action():
+    """A currently-COMPLIANT but auto-remediable check must still report
+    action=AUTO_REMEDIATE on the skip path — Action is a design-time capability,
+    not a function of the current status. (Guards resolve the registry first.)"""
+    res = remediate(_finding("s3-public-access", Status.COMPLIANT), None)
+    assert res.outcome is Outcome.SKIPPED
+    assert res.action is Action.AUTO_REMEDIATE
+
+
 def test_error_is_never_remediated_even_with_apply():
     """The core safety property: an un-evaluatable finding is never acted on,
     even when the caller explicitly asks to apply."""

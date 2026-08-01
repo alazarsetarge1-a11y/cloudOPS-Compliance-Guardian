@@ -17,7 +17,7 @@ alongside the resources they fix. Currently one runbook:
 
 ## How the pieces connect
 
-```
+```text
 detective s3-public-access check ──emits──▶ Finding(check_id="s3-public-access")
                                                │
 corrective.remediator.remediate(finding, apply=True)

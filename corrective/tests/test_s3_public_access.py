@@ -70,7 +70,9 @@ def test_apply_starts_ssm_execution():
         )
         res = rem.remediate_s3_public_access(_finding(), _FakeSession(ssm), apply=True)
         stub.assert_no_pending_responses()
-    assert res.outcome is Outcome.REMEDIATED
+    # STARTED, not REMEDIATED: we only started the runbook. Terminal success is
+    # confirmed later by reconciling the SSM execution.
+    assert res.outcome is Outcome.STARTED
     assert res.plan["execution_id"] == exec_id
 
 
