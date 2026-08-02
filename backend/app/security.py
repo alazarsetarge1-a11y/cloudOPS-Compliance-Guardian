@@ -33,8 +33,12 @@ def require_api_key(provided: Annotated[str | None, Security(_api_key_header)]) 
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Remediation is disabled: no API key configured on the server.",
         )
-    # Constant-time compare so a wrong key can't be recovered via timing.
-    if not provided or not secrets.compare_digest(provided, expected):
+    # Constant-time compare so a wrong key can't be recovered via timing. Compare
+    # ENCODED bytes: secrets.compare_digest raises TypeError on a non-ASCII str,
+    # which would surface as a 500 — a crafted header must get a clean 401.
+    if not provided or not secrets.compare_digest(
+        provided.encode("utf-8"), expected.encode("utf-8")
+    ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or missing API key.",

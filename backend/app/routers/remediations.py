@@ -8,6 +8,7 @@ only if the server itself confirms the resource is currently NON_COMPLIANT. The
 
 from __future__ import annotations
 
+import logging
 from typing import Annotated
 
 import boto3
@@ -20,6 +21,11 @@ from corrective.remediator import remediate
 from detective.checks.base import Finding, Status
 
 router = APIRouter()
+
+# This route is the only place in the system that mutates a live AWS account, so
+# every attempt is logged: what was targeted, whether it was applied, and the
+# outcome. That server-side record is the audit trail an incident review needs.
+logger = logging.getLogger("ccg.remediations")
 
 
 @router.post(
@@ -50,6 +56,12 @@ def create_remediation(
         None,
     )
     if match is None:
+        logger.info(
+            "remediation rejected: no NON_COMPLIANT finding check_id=%s resource_id=%s apply=%s",
+            body.check_id,
+            body.resource_id,
+            body.apply,
+        )
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=(
@@ -57,4 +69,13 @@ def create_remediation(
                 f"on resource '{body.resource_id}'."
             ),
         )
-    return remediate(match, session, apply=body.apply).to_dict()
+    result = remediate(match, session, apply=body.apply)
+    logger.info(
+        "remediation check_id=%s resource_id=%s apply=%s action=%s outcome=%s",
+        result.check_id,
+        result.resource_id,
+        body.apply,
+        result.action.value,
+        result.outcome.value,
+    )
+    return result.to_dict()

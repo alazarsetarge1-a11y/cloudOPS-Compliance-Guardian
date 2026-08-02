@@ -31,7 +31,9 @@ def _build_session() -> boto3.Session:
     assume_role = os.environ.get("CCG_ASSUME_ROLE_ARN")
     region = os.environ.get("CCG_AWS_REGION", "us-east-1")
 
-    base = boto3.Session(profile_name=profile) if profile else boto3.Session()
+    # region_name on the base session too, so CCG_AWS_REGION is honored on the
+    # no-assume-role path (the production/ECS path), not just after assume-role.
+    base = boto3.Session(profile_name=profile, region_name=region)
     if not assume_role:
         return base
 

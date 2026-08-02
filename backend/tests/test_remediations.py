@@ -9,6 +9,8 @@ auto-fix apply paths are validated live + in the corrective tests.
 import pytest
 from app.dependencies import get_findings, get_session
 from app.main import app
+from app.security import require_api_key
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from detective.checks.base import Finding, Severity, Status
@@ -93,3 +95,31 @@ def test_compliant_resource_is_not_remediated(client):
     # Trust model: the resource exists but is COMPLIANT, so there's nothing to
     # remediate — a forged "fix this" request gets 404, not a mutation.
     assert _post(client, "iam-mfa", "u-ok", apply=True).status_code == 404
+
+
+def test_forged_status_in_body_is_ignored(client):
+    # Even if the caller injects a status claiming the resource is bad, the server
+    # re-derives from the scan — iam-mfa/u-ok is COMPLIANT, so still 404. This
+    # pins the trust model against an extra unexpected body field.
+    r = client.post(
+        "/remediations",
+        json={
+            "check_id": "iam-mfa",
+            "resource_id": "u-ok",
+            "apply": True,
+            "status": "NON_COMPLIANT",
+        },
+        headers={"X-API-Key": API_KEY},
+    )
+    assert r.status_code == 404
+
+
+def test_non_ascii_api_key_is_401_not_500(monkeypatch):
+    # A real latin-1 header can carry a non-ASCII byte that reaches the guard; it
+    # must yield 401, not a 500 from compare_digest choking on a non-ASCII str.
+    # (httpx's TestClient can't send non-ASCII headers, so we exercise the guard
+    # function directly.)
+    monkeypatch.setenv("CCG_API_KEY", "expected-key")
+    with pytest.raises(HTTPException) as exc:
+        require_api_key("café-clé")
+    assert exc.value.status_code == 401

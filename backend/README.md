@@ -47,12 +47,13 @@ assume-role is needed and `CCG_API_KEY` is injected from Secrets Manager / SSM.
 
 ## Run it locally
 
+All commands are run **from the repository root**:
+
 ```bash
-python -m venv .venv && . .venv/bin/activate
-pip install -r requirements-dev.txt
+python -m venv backend/.venv && . backend/.venv/bin/activate
+pip install -r backend/requirements-dev.txt
 aws sso login --profile ccg   # for live AWS data
 
-# from the repo root:
 CCG_AWS_PROFILE=ccg \
 CCG_ASSUME_ROLE_ARN=arn:aws:iam::<member-account-id>:role/OrganizationAccountAccessRole \
 CCG_API_KEY=<your-key> \
@@ -72,7 +73,7 @@ data so no test touches real AWS.
 
 ## Layout
 
-```
+```text
 backend/app/
   main.py            # app + router wiring (thin composition root)
   dependencies.py    # get_session, get_findings (chained DI)

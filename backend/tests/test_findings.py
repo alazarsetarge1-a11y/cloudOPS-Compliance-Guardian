@@ -78,5 +78,13 @@ def test_compliance_score(client):
     assert body["compliance_score_pct"] == 33.3
 
 
+def test_score_is_none_when_only_errors(client):
+    # summarize() excludes ERROR from the evaluable count, so the score is None
+    # ("no evaluable resources"), not 0%. Guard that API contract.
+    only_error = [_finding("s3-public-access", Status.ERROR, Severity.MEDIUM, "e1")]
+    app.dependency_overrides[get_findings] = lambda: only_error
+    assert client.get("/compliance-score").json()["compliance_score_pct"] is None
+
+
 def test_health(client):
     assert client.get("/health").json() == {"status": "ok"}
