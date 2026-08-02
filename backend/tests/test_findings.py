@@ -1,15 +1,14 @@
-"""Tests for GET /findings.
+"""Tests for GET /findings and GET /compliance-score.
 
-The payoff of dependency injection: we override `get_session` so no route touches
-real AWS, and monkeypatch `run_all_checks` to return canned findings. The route's
-own logic (filtering, serialization, validation) is then tested offline and
+The payoff of chained dependency injection: we override `get_findings` once to
+return canned findings, so no route touches real AWS. The routes' own logic
+(filtering, serialization, validation, summarization) is tested offline and
 deterministically — the same discipline as the detective/corrective tests.
 """
 
 import pytest
-from app.dependencies import get_session
+from app.dependencies import get_findings
 from app.main import app
-from app.routers import findings as findings_router
 from fastapi.testclient import TestClient
 
 from detective.checks.base import Finding, Severity, Status
@@ -39,11 +38,9 @@ CANNED = [
 
 
 @pytest.fixture
-def client(monkeypatch):
-    # No real scan: canned findings instead of run_all_checks hitting AWS.
-    monkeypatch.setattr(findings_router, "run_all_checks", lambda session: CANNED)
-    # No real credentials: the session dependency is replaced wholesale.
-    app.dependency_overrides[get_session] = lambda: None
+def client():
+    # Inject canned findings in place of a real scan — no AWS, no credentials.
+    app.dependency_overrides[get_findings] = lambda: CANNED
     yield TestClient(app)
     app.dependency_overrides.clear()
 
@@ -68,8 +65,17 @@ def test_filter_by_severity(client):
 
 def test_invalid_status_is_rejected(client):
     # The enum-typed query param validates input before our code runs.
-    r = client.get("/findings", params={"status": "BOGUS"})
-    assert r.status_code == 422
+    assert client.get("/findings", params={"status": "BOGUS"}).status_code == 422
+
+
+def test_compliance_score(client):
+    body = client.get("/compliance-score").json()
+    assert body["total_findings"] == 3
+    assert body["by_status"]["NON_COMPLIANT"] == 2
+    assert body["by_status"]["COMPLIANT"] == 1
+    assert body["non_compliant_by_severity"]["CRITICAL"] == 1
+    # 1 compliant of 3 evaluable -> 33.3%
+    assert body["compliance_score_pct"] == 33.3
 
 
 def test_health(client):

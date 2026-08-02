@@ -31,3 +31,15 @@ class FindingOut(BaseModel):
     remediation: str
     evidence: dict[str, Any]
     checked_at: datetime
+
+
+class ComplianceScoreOut(BaseModel):
+    """The rolled-up posture the dashboard's headline number reads. Mirrors the
+    detective runner's summarize()."""
+
+    total_findings: int
+    by_status: dict[str, int]
+    non_compliant_by_severity: dict[str, int]
+    # None when there are no evaluable resources — ERROR resources are excluded
+    # from the score, so "no data" is distinct from 0%.
+    compliance_score_pct: float | None

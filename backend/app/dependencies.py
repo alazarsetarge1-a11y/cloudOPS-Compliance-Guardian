@@ -17,8 +17,13 @@ runner's CLI uses.
 from __future__ import annotations
 
 import os
+from typing import Annotated
 
 import boto3
+from fastapi import Depends
+
+from detective.checks.base import Finding
+from detective.runner import run_all_checks
 
 
 def _build_session() -> boto3.Session:
@@ -49,3 +54,14 @@ def get_session() -> boto3.Session:
     test ever touches real AWS.
     """
     return _build_session()
+
+
+def get_findings(session: Annotated[boto3.Session, Depends(get_session)]) -> list[Finding]:
+    """Dependency: the findings from a full detective scan.
+
+    A dependency that itself depends on another (get_session) — FastAPI resolves
+    the chain. Routes that need the current posture (/findings, /compliance-score)
+    depend on THIS, so the scan lives in one place and tests inject canned findings
+    by overriding just this one function (no AWS, no monkeypatching internals).
+    """
+    return run_all_checks(session)

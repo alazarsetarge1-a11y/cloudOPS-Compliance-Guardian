@@ -1,40 +1,42 @@
-"""`/findings` — read the current compliance posture.
+"""Read the current compliance posture: `/findings` and `/compliance-score`.
 
-The route holds NO compliance logic: it wraps the detective service layer
-(`run_all_checks`) and applies optional filters. That's the transport-agnostic
-design paying off — the exact same function backs the MCP `get_violations` tool.
+Neither route holds compliance logic — they consume the `get_findings`
+dependency (a full detective scan) and either serialize/filter it or roll it up
+via the runner's `summarize()`. Same functions back the MCP tools later.
 """
 
 from __future__ import annotations
 
 from typing import Annotated
 
-import boto3
 from fastapi import APIRouter, Depends, Query
 
-from app.dependencies import get_session
-from app.schemas import FindingOut
-from detective.checks.base import Severity, Status
-from detective.runner import run_all_checks
+from app.dependencies import get_findings
+from app.schemas import ComplianceScoreOut, FindingOut
+from detective.checks.base import Finding, Severity, Status
+from detective.runner import summarize
 
-router = APIRouter(tags=["findings"])
+router = APIRouter()
 
 
-@router.get("/findings", response_model=list[FindingOut])
+@router.get("/findings", response_model=list[FindingOut], tags=["findings"])
 def list_findings(
-    session: Annotated[boto3.Session, Depends(get_session)],
+    findings: Annotated[list[Finding], Depends(get_findings)],
     status: Annotated[Status | None, Query(description="Filter by compliance status")] = None,
     severity: Annotated[Severity | None, Query(description="Filter by severity")] = None,
 ) -> list[dict]:
-    """Run every detective check and return the findings, newest scan each call.
-
-    `status` / `severity` are optional query filters. Because they're typed as the
-    domain StrEnums, FastAPI validates them (a bad value 422s) and renders them as
-    dropdowns in /docs — for free.
-    """
-    findings = run_all_checks(session)
+    """Return the current findings. `status` / `severity` are optional filters;
+    typing them as the domain StrEnums gives validation (bad value → 422) and
+    /docs dropdowns for free."""
     return [
         f.to_dict()
         for f in findings
         if (status is None or f.status == status) and (severity is None or f.severity == severity)
     ]
+
+
+@router.get("/compliance-score", response_model=ComplianceScoreOut, tags=["score"])
+def compliance_score(findings: Annotated[list[Finding], Depends(get_findings)]) -> dict:
+    """Roll the findings up into counts + a compliance score — the dashboard's
+    headline number. Wraps the runner's summarize()."""
+    return summarize(findings)
