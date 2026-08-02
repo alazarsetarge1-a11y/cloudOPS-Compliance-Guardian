@@ -41,5 +41,7 @@ skips = ["B101"]
 
 [tool.pytest.ini_options]
 testpaths = ["backend/tests", "detective/tests", "corrective/tests"]
-pythonpath = ["."]
+# "." makes detective/ and corrective/ importable; "backend" makes the backend's
+# own `app` package importable from backend/tests without installing it.
+pythonpath = [".", "backend"]
 addopts = "-q"
