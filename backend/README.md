@@ -14,8 +14,10 @@ server without duplication.
 | `/compliance-score` | GET | **API key** | `summarize` (counts + score) |
 | `/remediations` | POST | **API key** | `remediate` (gated) |
 
-Only `/health` is unauthenticated. Findings expose the account's misconfigurations
-and ARNs — a threat map — so the read endpoints require the key too.
+Unauthenticated routes: `/health` (liveness) and FastAPI's generated docs
+(`/docs`, `/redoc`, `/openapi.json`) — which expose only the API *shape*, not any
+findings. **Every route that returns findings data requires the key**, because
+findings are a threat map of the account.
 
 Interactive docs at `/docs` (Swagger UI), machine-readable spec at `/openapi.json`
 — both auto-generated from the type hints + Pydantic models.

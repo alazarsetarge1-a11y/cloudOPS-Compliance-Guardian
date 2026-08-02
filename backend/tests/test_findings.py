@@ -48,9 +48,12 @@ def client(monkeypatch):
 
 
 def test_reads_require_api_key(client):
-    # No key -> 401 on both protected reads; /health stays open.
+    # Missing key AND wrong key both -> 401 on the protected reads (a guard that
+    # accepted any non-empty key would pass a missing-only test); /health open.
     assert client.get("/findings").status_code == 401
     assert client.get("/compliance-score").status_code == 401
+    assert client.get("/findings", headers={"X-API-Key": "wrong"}).status_code == 401
+    assert client.get("/compliance-score", headers={"X-API-Key": "wrong"}).status_code == 401
     assert client.get("/health").status_code == 200
 
 
