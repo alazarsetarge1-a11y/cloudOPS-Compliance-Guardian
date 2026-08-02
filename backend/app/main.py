@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from fastapi import FastAPI
 
-from app.routers import findings
+from app.routers import findings, remediations
 
 # The title/version/summary aren't decoration — FastAPI publishes them in the
 # OpenAPI spec and renders them at /docs, which is the API's contract.
@@ -21,6 +21,7 @@ app = FastAPI(
 # Domain routes live in routers/ and are mounted here. main.py stays a thin
 # composition root: app metadata + wiring, no business logic.
 app.include_router(findings.router)
+app.include_router(remediations.router)
 
 
 @app.get("/health", tags=["meta"])

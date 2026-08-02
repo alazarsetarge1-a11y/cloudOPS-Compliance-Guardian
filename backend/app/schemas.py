@@ -43,3 +43,25 @@ class ComplianceScoreOut(BaseModel):
     # None when there are no evaluable resources — ERROR resources are excluded
     # from the score, so "no data" is distinct from 0%.
     compliance_score_pct: float | None
+
+
+class RemediationRequest(BaseModel):
+    """What a caller sends to POST /remediations. Note what's ABSENT: no finding
+    body, no status. The caller names the resource; the server re-derives whether
+    it's actually a violation. `apply` is the gate — false (default) = dry run."""
+
+    check_id: str
+    resource_id: str
+    apply: bool = False
+
+
+class RemediationOut(BaseModel):
+    """A remediation result as the API returns it. Mirrors corrective.RemediationResult."""
+
+    check_id: str
+    resource_id: str
+    action: str
+    outcome: str
+    summary: str
+    plan: dict[str, Any]
+    executed_at: datetime
