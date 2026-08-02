@@ -67,8 +67,10 @@ jobs:
           # local passes — the classic "works on my machine". Keep these in sync
           # with .pre-commit-config.yaml.
           pip install ruff==0.16.0 "bandit[toml]==1.9.4" pytest
-          # requirements.txt may not list everything yet; tolerate absence.
-          if [ -f backend/requirements.txt ]; then pip install -r backend/requirements.txt; fi
+          # Prefer the pinned dev deps (runtime + pytest + httpx for TestClient);
+          # fall back to runtime-only, then tolerate absence entirely.
+          if [ -f backend/requirements-dev.txt ]; then pip install -r backend/requirements-dev.txt
+          elif [ -f backend/requirements.txt ]; then pip install -r backend/requirements.txt; fi
 
       - name: Ruff lint
         run: ruff check --output-format=github .
