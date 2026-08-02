@@ -10,9 +10,12 @@ server without duplication.
 | Route | Verb | Auth | Wraps |
 |---|---|---|---|
 | `/health` | GET | none | — (liveness; no AWS calls) |
-| `/findings` | GET | none | `run_all_checks` (+ `?status=` / `?severity=` filters) |
-| `/compliance-score` | GET | none | `summarize` (counts + score) |
+| `/findings` | GET | **API key** | `run_all_checks` (+ `?status=` / `?severity=` filters) |
+| `/compliance-score` | GET | **API key** | `summarize` (counts + score) |
 | `/remediations` | POST | **API key** | `remediate` (gated) |
+
+Only `/health` is unauthenticated. Findings expose the account's misconfigurations
+and ARNs — a threat map — so the read endpoints require the key too.
 
 Interactive docs at `/docs` (Swagger UI), machine-readable spec at `/openapi.json`
 — both auto-generated from the type hints + Pydantic models.
@@ -30,8 +33,9 @@ Interactive docs at `/docs` (Swagger UI), machine-readable spec at `/openapi.jso
 - **Gate:** `apply` defaults to `false` (dry run → `PLANNED`); `apply: true`
   executes (auto-fixes return `STARTED`, notify checks return `NOTIFIED`).
 - **Auth:** requires the `X-API-Key` header (checked against `CCG_API_KEY`,
-  constant-time). Fails **closed** — if no key is configured on the server, the
-  endpoint is disabled (`503`), never left open.
+  constant-time, on encoded bytes so a non-ASCII header is a clean 401). Fails
+  **closed** — if no key is configured on the server, the endpoint is disabled
+  (`503`), never left open. The same guard protects the read endpoints.
 
 ## Configuration (env vars)
 
@@ -40,7 +44,7 @@ Interactive docs at `/docs` (Swagger UI), machine-readable spec at `/openapi.jso
 | `CCG_AWS_PROFILE` | base AWS profile (local SSO); unset → default cred chain | unset |
 | `CCG_ASSUME_ROLE_ARN` | role to assume into the member account | unset |
 | `CCG_AWS_REGION` | region for the assumed session | us-east-1 |
-| `CCG_API_KEY` | required key for `POST /remediations` | unset → endpoint 503s |
+| `CCG_API_KEY` | required key for all endpoints except `/health` | unset → those endpoints 503 |
 
 In production on ECS the task role *is* the member-account identity, so no
 assume-role is needed and `CCG_API_KEY` is injected from Secrets Manager / SSM.

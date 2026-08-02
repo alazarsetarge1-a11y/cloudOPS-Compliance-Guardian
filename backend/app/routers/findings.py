@@ -13,10 +13,14 @@ from fastapi import APIRouter, Depends, Query
 
 from app.dependencies import get_findings
 from app.schemas import ComplianceScoreOut, FindingOut
+from app.security import require_api_key
 from detective.checks.base import Finding, Severity, Status
 from detective.runner import summarize
 
-router = APIRouter()
+# Router-level auth: findings expose the account's misconfigurations + ARNs — a
+# threat map — so both read routes require the API key. Only /health (in main.py)
+# is unauthenticated.
+router = APIRouter(dependencies=[Depends(require_api_key)])
 
 
 @router.get("/findings", response_model=list[FindingOut], tags=["findings"])

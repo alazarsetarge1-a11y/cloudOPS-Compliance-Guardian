@@ -1,9 +1,8 @@
-"""Tests for GET /findings and GET /compliance-score.
+"""Tests for GET /findings and GET /compliance-score (API-key protected).
 
-The payoff of chained dependency injection: we override `get_findings` once to
-return canned findings, so no route touches real AWS. The routes' own logic
-(filtering, serialization, validation, summarization) is tested offline and
-deterministically — the same discipline as the detective/corrective tests.
+Chained DI payoff: we override `get_findings` once to return canned findings, so
+no route touches real AWS. The routes' own logic (auth, filtering, serialization,
+validation, summarization) is tested offline and deterministically.
 """
 
 import pytest
@@ -12,6 +11,9 @@ from app.main import app
 from fastapi.testclient import TestClient
 
 from detective.checks.base import Finding, Severity, Status
+
+API_KEY = "test-secret-key"
+AUTH = {"X-API-Key": API_KEY}
 
 
 def _finding(check_id, status, severity, rid):
@@ -38,53 +40,58 @@ CANNED = [
 
 
 @pytest.fixture
-def client():
-    # Inject canned findings in place of a real scan — no AWS, no credentials.
+def client(monkeypatch):
+    monkeypatch.setenv("CCG_API_KEY", API_KEY)
     app.dependency_overrides[get_findings] = lambda: CANNED
     yield TestClient(app)
     app.dependency_overrides.clear()
 
 
+def test_reads_require_api_key(client):
+    # No key -> 401 on both protected reads; /health stays open.
+    assert client.get("/findings").status_code == 401
+    assert client.get("/compliance-score").status_code == 401
+    assert client.get("/health").status_code == 200
+
+
 def test_lists_all_findings(client):
-    r = client.get("/findings")
+    r = client.get("/findings", headers=AUTH)
     assert r.status_code == 200
     assert len(r.json()) == 3
 
 
 def test_filter_by_status(client):
-    r = client.get("/findings", params={"status": "NON_COMPLIANT"})
+    r = client.get("/findings", params={"status": "NON_COMPLIANT"}, headers=AUTH)
     assert {f["check_id"] for f in r.json()} == {"s3-public-access", "security-groups"}
 
 
 def test_filter_by_severity(client):
-    r = client.get("/findings", params={"severity": "CRITICAL"})
+    r = client.get("/findings", params={"severity": "CRITICAL"}, headers=AUTH)
     body = r.json()
     assert len(body) == 1
     assert body[0]["check_id"] == "s3-public-access"
 
 
 def test_invalid_status_is_rejected(client):
-    # The enum-typed query param validates input before our code runs.
-    assert client.get("/findings", params={"status": "BOGUS"}).status_code == 422
+    r = client.get("/findings", params={"status": "BOGUS"}, headers=AUTH)
+    assert r.status_code == 422
 
 
 def test_compliance_score(client):
-    body = client.get("/compliance-score").json()
+    body = client.get("/compliance-score", headers=AUTH).json()
     assert body["total_findings"] == 3
     assert body["by_status"]["NON_COMPLIANT"] == 2
     assert body["by_status"]["COMPLIANT"] == 1
     assert body["non_compliant_by_severity"]["CRITICAL"] == 1
-    # 1 compliant of 3 evaluable -> 33.3%
     assert body["compliance_score_pct"] == 33.3
 
 
 def test_score_is_none_when_only_errors(client):
-    # summarize() excludes ERROR from the evaluable count, so the score is None
-    # ("no evaluable resources"), not 0%. Guard that API contract.
     only_error = [_finding("s3-public-access", Status.ERROR, Severity.MEDIUM, "e1")]
     app.dependency_overrides[get_findings] = lambda: only_error
-    assert client.get("/compliance-score").json()["compliance_score_pct"] is None
+    body = client.get("/compliance-score", headers=AUTH).json()
+    assert body["compliance_score_pct"] is None
 
 
-def test_health(client):
+def test_health_is_open(client):
     assert client.get("/health").json() == {"status": "ok"}
