@@ -28,3 +28,16 @@ export interface ComplianceScore {
   /** null when there are no evaluable resources — distinct from 0%. */
   compliance_score_pct: number | null;
 }
+
+export type Action = "AUTO_REMEDIATE" | "NOTIFY";
+export type Outcome = "PLANNED" | "STARTED" | "REMEDIATED" | "NOTIFIED" | "SKIPPED" | "FAILED";
+
+export interface RemediationResult {
+  check_id: string;
+  resource_id: string;
+  action: Action;
+  outcome: Outcome;
+  summary: string;
+  plan: Record<string, unknown>;
+  executed_at: string;
+}

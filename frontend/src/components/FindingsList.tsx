@@ -2,6 +2,7 @@ import { type ReactNode, useMemo, useState } from "react";
 
 import type { Finding, Severity, Status } from "../types";
 import { SeverityBadge, StatusBadge } from "./badges";
+import { RemediationPanel } from "./RemediationPanel";
 
 const SEV_RANK: Record<Severity, number> = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
 
@@ -149,6 +150,7 @@ function FindingDetail({ finding }: { finding: Finding }) {
           {finding.region} · {finding.account_id} · {new Date(finding.checked_at).toLocaleString()}
         </span>
       </Field>
+      {finding.status === "NON_COMPLIANT" && <RemediationPanel finding={finding} />}
     </div>
   );
 }
