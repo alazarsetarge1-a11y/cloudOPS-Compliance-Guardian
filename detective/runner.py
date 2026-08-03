@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import sys
 from collections import Counter
 from typing import Any
@@ -33,6 +34,8 @@ from detective.checks import (
     tag_compliance,
 )
 from detective.checks.base import Finding, Severity, Status, account_id_of
+
+logger = logging.getLogger("ccg.detective")
 
 # The registry. Every check module exposes `CHECK_ID` and `run(session)`.
 # Adding a check is one line here.
@@ -66,6 +69,10 @@ def run_all_checks(session: boto3.Session) -> list[Finding]:
 
 
 def _check_failed(check_id: str, account: str, exc: Exception) -> Finding:
+    # Log the full exception server-side, but keep it OUT of the finding: the
+    # detail flows to the dashboard, and boto3 messages can carry ARNs / account
+    # ids / resource names. Only the safe exception class name is surfaced.
+    logger.warning("detective check %r failed to run", check_id, exc_info=exc)
     return Finding(
         check_id=check_id,
         resource_id=f"check:{check_id}",
@@ -76,7 +83,7 @@ def _check_failed(check_id: str, account: str, exc: Exception) -> Finding:
         status=Status.ERROR,
         severity=Severity.MEDIUM,
         title=f"Check '{check_id}' failed to run",
-        detail=f"{type(exc).__name__}: {exc}"[:500],
+        detail=f"The '{check_id}' control could not be evaluated ({type(exc).__name__}); see server logs.",
         remediation="Investigate the check; results for this control are unavailable.",
         evidence={"error_type": type(exc).__name__},
     )

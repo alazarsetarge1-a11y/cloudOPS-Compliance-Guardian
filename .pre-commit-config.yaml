@@ -33,7 +33,10 @@ repos:
       # Validates every SCP policy + Config rule payload is parseable JSON.
       # A malformed SCP is rejected by AWS Organizations with an unhelpful
       # error — catching it here saves a round trip to the console.
+      # Excludes TypeScript configs: they're JSONC (comments + trailing commas),
+      # valid for tsc but not strict JSON.
       - id: check-json
+        exclude: ^frontend/tsconfig.*\.json$
       - id: check-yaml
         args: [--allow-multiple-documents] # SSM runbooks / k8s-style manifests
       - id: check-added-large-files
