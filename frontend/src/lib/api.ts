@@ -49,7 +49,7 @@ export const apiPost = <T>(path: string, body: unknown) =>
 export function safeErrorMessage(e: unknown): string {
   if (e instanceof ApiError) {
     if (e.status === 401 || e.status === 403) return "Not authorized.";
-    if (e.status === 404) return "That finding is no longer current.";
+    if (e.status === 404) return "That item is no longer available.";
     if (e.status === 422) return "The request was invalid.";
     if (e.status === 503) return "The service is temporarily unavailable.";
     if (e.status >= 500) return "The server encountered an error.";

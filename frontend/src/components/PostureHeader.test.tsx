@@ -59,4 +59,15 @@ describe("PostureHeader", () => {
     expect(screen.getByText(/scan incomplete/i)).toBeInTheDocument();
     expect(screen.queryByText(/all clear/i)).not.toBeInTheDocument();
   });
+
+  it("suppresses the % when no control is evaluable", () => {
+    const allError = score({
+      by_status: { COMPLIANT: 0, NON_COMPLIANT: 0, ERROR: 2 },
+      non_compliant_by_severity: { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 },
+      compliance_score_pct: null,
+    });
+    render(<PostureHeader score={allError} loading={false} error={null} onRetry={() => {}} />);
+    expect(screen.getByText("n/a")).toBeInTheDocument();
+    expect(screen.queryByText("%")).not.toBeInTheDocument();
+  });
 });

@@ -76,8 +76,14 @@ export function PostureHeader({ score, loading, error, onRetry }: PostureHeaderP
         <div className="text-right">
           <p className="font-mono text-xs uppercase tracking-wider text-ink-faint">Compliance score</p>
           <p className="mt-1 text-5xl font-semibold tabular-nums text-ink">
-            {score.compliance_score_pct ?? "—"}
-            <span className="text-2xl text-ink-dim">%</span>
+            {score.compliance_score_pct === null ? (
+              <span className="text-3xl text-ink-dim">n/a</span>
+            ) : (
+              <>
+                {score.compliance_score_pct}
+                <span className="text-2xl text-ink-dim">%</span>
+              </>
+            )}
           </p>
           <p className="mt-1 text-sm text-ink-dim">
             {compliant} of {evaluable} resources compliant
