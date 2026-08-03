@@ -17,6 +17,7 @@ runner's CLI uses.
 from __future__ import annotations
 
 import os
+import time
 from typing import Annotated
 
 import boto3
@@ -24,6 +25,14 @@ from fastapi import Depends
 
 from detective.checks.base import Finding
 from detective.runner import run_all_checks
+
+# A full scan sweeps every region and is slow. The dashboard loads /findings AND
+# /compliance-score together (and dev StrictMode double-fetches), so without this
+# a single page load would trigger several serial scans. Cache the scan result
+# briefly so those requests reuse one scan. Single-account app -> a global key is
+# safe; 30s freshness is fine for a compliance dashboard.
+_SCAN_TTL_SECONDS = 60.0
+_scan_cache: dict[str, tuple[float, list[Finding]]] = {}
 
 
 def _build_session() -> boto3.Session:
@@ -59,11 +68,20 @@ def get_session() -> boto3.Session:
 
 
 def get_findings(session: Annotated[boto3.Session, Depends(get_session)]) -> list[Finding]:
-    """Dependency: the findings from a full detective scan.
+    """Dependency: the findings from a full detective scan (cached briefly).
 
     A dependency that itself depends on another (get_session) — FastAPI resolves
     the chain. Routes that need the current posture (/findings, /compliance-score)
     depend on THIS, so the scan lives in one place and tests inject canned findings
     by overriding just this one function (no AWS, no monkeypatching internals).
+
+    Serves a cached scan when one is fresh (< _SCAN_TTL_SECONDS), so a dashboard
+    load doesn't fan out into several serial multi-region scans.
     """
-    return run_all_checks(session)
+    now = time.monotonic()
+    cached = _scan_cache.get("all")
+    if cached is not None and now - cached[0] < _SCAN_TTL_SECONDS:
+        return cached[1]
+    findings = run_all_checks(session)
+    _scan_cache["all"] = (now, findings)
+    return findings
