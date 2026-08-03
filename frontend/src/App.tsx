@@ -1,8 +1,12 @@
+import { PostureHeader } from "./components/PostureHeader";
+import { useComplianceScore } from "./hooks/useComplianceScore";
+
 /**
- * App shell: the persistent frame (header + main region) every view renders into.
- * Presentational only — no data fetching lives here.
+ * App shell + composition root: wires the data hooks and hands their state to
+ * presentational views. The views themselves never fetch.
  */
 export function App() {
+  const score = useComplianceScore();
   return (
     <div className="flex min-h-full flex-col">
       <header className="border-b border-line bg-surface-panel">
@@ -30,7 +34,12 @@ export function App() {
       </header>
 
       <main className="mx-auto w-full max-w-7xl flex-1 px-6 py-8">
-        <p className="text-ink-dim">Design system wired. Data views come next.</p>
+        <PostureHeader
+          score={score.data}
+          loading={score.loading}
+          error={score.error}
+          onRetry={score.refetch}
+        />
       </main>
     </div>
   );
