@@ -1,0 +1,72 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ------------------------------------------------------------------ *
+ * Design tokens. Components reference these ONLY through the semantic
+ * Tailwind classes (bg-surface-panel, text-ink-dim, ...). Dark mode is a
+ * variable swap here — no per-element dark: classes.
+ * ------------------------------------------------------------------ */
+:root {
+  color-scheme: light dark;
+
+  --surface-base: #eef2f7;
+  --surface-panel: #ffffff;
+  --surface-raised: #ffffff;
+  --line: #d6deea;
+  --line-strong: #c2cee0;
+  --ink: #16202e;
+  --ink-dim: #55637a;
+  --ink-faint: #8794a8;
+  --accent: #0d8f9e;
+  --accent-wash: rgba(13, 143, 158, 0.1);
+
+  /* severity — used for chrome/badges; charts follow the dataviz skill */
+  --sev-critical: #d11f45;
+  --sev-high: #c2410c;
+  --sev-medium: #a16207;
+  --sev-low: #5b7089;
+
+  --status-compliant: #1f9a5f;
+  --status-noncompliant: #d11f45;
+  --status-error: #7c6f9c;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --surface-base: #0c1320;
+    --surface-panel: #141d2c;
+    --surface-raised: #18212f;
+    --line: #26324a;
+    --line-strong: #33415c;
+    --ink: #e7edf6;
+    --ink-dim: #9aa8be;
+    --ink-faint: #6d7c93;
+    --accent: #2fc7d8;
+    --accent-wash: rgba(47, 199, 216, 0.11);
+
+    --sev-critical: #ff5c7a;
+    --sev-high: #f59e42;
+    --sev-medium: #e0b13a;
+    --sev-low: #8fa2bd;
+
+    --status-compliant: #43c98a;
+    --status-noncompliant: #ff5c7a;
+    --status-error: #a99cc9;
+  }
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    @apply bg-surface-base text-ink font-sans antialiased;
+  }
+  /* Visible keyboard focus everywhere — accessibility floor. */
+  :focus-visible {
+    @apply outline-none ring-2 ring-accent ring-offset-2 ring-offset-surface-base;
+  }
+}
