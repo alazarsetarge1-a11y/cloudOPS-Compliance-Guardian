@@ -49,4 +49,14 @@ describe("PostureHeader", () => {
     render(<PostureHeader score={clear} loading={false} error={null} onRetry={() => {}} />);
     expect(screen.getByText(/all clear/i)).toBeInTheDocument();
   });
+
+  it("shows scan-incomplete (not all clear) when checks errored", () => {
+    const withErrors = score({
+      by_status: { COMPLIANT: 2, NON_COMPLIANT: 0, ERROR: 1 },
+      non_compliant_by_severity: { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 },
+    });
+    render(<PostureHeader score={withErrors} loading={false} error={null} onRetry={() => {}} />);
+    expect(screen.getByText(/scan incomplete/i)).toBeInTheDocument();
+    expect(screen.queryByText(/all clear/i)).not.toBeInTheDocument();
+  });
 });

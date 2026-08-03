@@ -28,6 +28,7 @@ export function PostureHeader({ score, loading, error, onRetry }: PostureHeaderP
   const onFire = sev.CRITICAL + sev.HIGH;
   const nonCompliant = score.by_status.NON_COMPLIANT;
   const compliant = score.by_status.COMPLIANT;
+  const errors = score.by_status.ERROR;
   const evaluable = compliant + nonCompliant;
 
   return (
@@ -44,6 +45,19 @@ export function PostureHeader({ score, loading, error, onRetry }: PostureHeaderP
                 {onFire} <span className="text-xl font-normal text-ink-dim">critical + high</span>
               </p>
               <p className="mt-1 text-sm text-ink-dim">exposed right now — remediate these first</p>
+            </>
+          ) : errors > 0 ? (
+            <>
+              <p className="font-mono text-xs uppercase tracking-wider text-status-error">
+                Scan incomplete
+              </p>
+              <p className="mt-1 text-4xl font-semibold tracking-tight text-ink">
+                {errors} control{errors === 1 ? "" : "s"}{" "}
+                <span className="text-xl font-normal text-ink-dim">could not be evaluated</span>
+              </p>
+              <p className="mt-1 text-sm text-ink-dim">
+                posture is unconfirmed until these are resolved
+              </p>
             </>
           ) : (
             <>
@@ -67,6 +81,7 @@ export function PostureHeader({ score, loading, error, onRetry }: PostureHeaderP
           </p>
           <p className="mt-1 text-sm text-ink-dim">
             {compliant} of {evaluable} resources compliant
+            {errors > 0 && ` · ${errors} not evaluated`}
           </p>
         </div>
       </div>

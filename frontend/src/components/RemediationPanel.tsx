@@ -15,6 +15,17 @@ const OUTCOME_LABEL: Record<Outcome, string> = {
   FAILED: "Remediation failed",
 };
 
+// Style by outcome — a 2xx response is not necessarily a success (the runbook
+// can report FAILED/SKIPPED), so don't paint everything green.
+const OUTCOME_CLASS: Record<Outcome, string> = {
+  PLANNED: "text-ink",
+  STARTED: "text-status-compliant",
+  REMEDIATED: "text-status-compliant",
+  NOTIFIED: "text-ink",
+  SKIPPED: "text-ink-dim",
+  FAILED: "text-status-error",
+};
+
 /**
  * The corrective loop, from the browser. Preview (dry run) → Apply. The preview
  * is always shown before any mutation, mirroring the backend's `apply` gate.
@@ -43,6 +54,11 @@ export function RemediationPanel({ finding }: { finding: Finding }) {
       {rem.phase === "previewed" && rem.result && (
         <div className="mt-2 space-y-2">
           <p className="text-sm text-ink">{rem.result.summary}</p>
+          {/* The exact operation the dry run returned — shown before Apply can
+              execute anything. Rendered as text (no dangerouslySetInnerHTML). */}
+          <pre className="overflow-x-auto rounded-lg border border-line bg-surface-base p-2 font-mono text-xs text-ink-dim">
+            {JSON.stringify(rem.result.plan, null, 2)}
+          </pre>
           {rem.result.action === "AUTO_REMEDIATE" ? (
             <div className="flex gap-2">
               <button type="button" onClick={rem.apply} disabled={working} className={BTN_PRIMARY}>
@@ -62,11 +78,13 @@ export function RemediationPanel({ finding }: { finding: Finding }) {
 
       {rem.phase === "applied" && rem.result && (
         <div className="mt-2 space-y-1">
-          <p className="text-sm font-medium text-status-compliant">
+          <p className={`text-sm font-medium ${OUTCOME_CLASS[rem.result.outcome]}`}>
             {OUTCOME_LABEL[rem.result.outcome]}
           </p>
           <p className="text-sm text-ink-dim">{rem.result.summary}</p>
-          <p className="text-xs text-ink-faint">Re-scan in a moment to confirm the fix.</p>
+          {(rem.result.outcome === "STARTED" || rem.result.outcome === "REMEDIATED") && (
+            <p className="text-xs text-ink-faint">Re-scan in a moment to confirm the fix.</p>
+          )}
         </div>
       )}
 

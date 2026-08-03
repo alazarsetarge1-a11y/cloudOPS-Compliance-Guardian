@@ -40,3 +40,20 @@ export const apiGet = <T>(path: string) => request<T>(path);
 
 export const apiPost = <T>(path: string, body: unknown) =>
   request<T>(path, { method: "POST", body: JSON.stringify(body) });
+
+/**
+ * A safe, user-facing message for an error. Never surfaces the raw backend
+ * `detail` in the UI — boto3/AWS messages can carry account ids, ARNs, or
+ * resource names, so we map by status instead of echoing server text.
+ */
+export function safeErrorMessage(e: unknown): string {
+  if (e instanceof ApiError) {
+    if (e.status === 401 || e.status === 403) return "Not authorized.";
+    if (e.status === 404) return "That finding is no longer current.";
+    if (e.status === 422) return "The request was invalid.";
+    if (e.status === 503) return "The service is temporarily unavailable.";
+    if (e.status >= 500) return "The server encountered an error.";
+    return "The request failed.";
+  }
+  return "Couldn't reach the API.";
+}

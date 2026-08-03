@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 
-import { ApiError, apiGet } from "../lib/api";
+import { apiGet, safeErrorMessage } from "../lib/api";
 
 /** The four states every data view needs, in one object. `data` is null until
  * loaded; `loading` starts true; `error` holds a message; `refetch` retries. */
@@ -33,7 +33,7 @@ export function useApiResource<T>(path: string): AsyncResource<T> {
       })
       .catch((e: unknown) => {
         if (cancelled) return;
-        setError(e instanceof ApiError ? `${e.status} — ${e.message}` : String(e));
+        setError(safeErrorMessage(e));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);

@@ -54,4 +54,17 @@ describe("FindingsList", () => {
     render(<FindingsList findings={[f({ status: "COMPLIANT" })]} {...props} />);
     expect(screen.getByText(/no outstanding violations/i)).toBeInTheDocument();
   });
+
+  it("expands only one row when two findings share check_id + resource_id across regions", () => {
+    const dup = [
+      f({ resource_id: "shared", region: "us-east-1" }),
+      f({ resource_id: "shared", region: "us-west-2" }),
+    ];
+    render(<FindingsList findings={dup} {...props} />);
+    const rows = screen.getAllByRole("button", { expanded: false });
+    expect(rows).toHaveLength(2);
+    fireEvent.click(rows[0]);
+    // If the row keys collided, openKey would match both and expand two rows.
+    expect(screen.getAllByRole("button", { expanded: true })).toHaveLength(1);
+  });
 });

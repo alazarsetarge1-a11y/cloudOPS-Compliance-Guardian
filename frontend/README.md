@@ -46,8 +46,10 @@ casual access in dev; production would front the API with real user auth
 
 ```bash
 npm install
-npm run dev     # http://localhost:5173
-npm run build   # typecheck (tsc) + production build
+npm run dev        # http://localhost:5173
+npm run build      # typecheck (tsc) + production build
+npm run test       # component tests (vitest run)
+npm run typecheck  # type-check app + test files (tsconfig.test.json)
 ```
 
 The backend must be running with CORS allowing the dev origin (see the backend

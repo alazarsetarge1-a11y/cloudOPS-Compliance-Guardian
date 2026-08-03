@@ -31,7 +31,7 @@ export function App() {
             </div>
           </div>
           <span className="rounded-full border border-line px-3 py-1 font-mono text-xs text-ink-dim">
-            member account · us-east-1
+            member account · all regions
           </span>
         </div>
       </header>

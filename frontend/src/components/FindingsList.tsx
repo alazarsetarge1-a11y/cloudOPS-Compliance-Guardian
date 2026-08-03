@@ -77,7 +77,9 @@ export function FindingsList({ findings, loading, error, onRetry }: FindingsList
       ) : (
         <ul className="divide-y divide-line">
           {rows.map((f) => {
-            const key = `${f.check_id}:${f.resource_id}`;
+            // Include region + type: a resource_id can repeat across regions or
+            // resource types, and a duplicate key would expand the wrong row.
+            const key = `${f.check_id}:${f.region}:${f.resource_type}:${f.resource_id}`;
             return (
               <FindingRow
                 key={key}

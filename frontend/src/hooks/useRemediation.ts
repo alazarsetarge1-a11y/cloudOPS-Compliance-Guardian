@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { ApiError, apiPost } from "../lib/api";
+import { apiPost, safeErrorMessage } from "../lib/api";
 import type { Finding, RemediationResult } from "../types";
 
 export type RemediationPhase = "idle" | "working" | "previewed" | "applied" | "error";
@@ -27,7 +27,7 @@ export function useRemediation(finding: Finding) {
       setResult(r);
       setPhase(apply ? "applied" : "previewed");
     } catch (e: unknown) {
-      setError(e instanceof ApiError ? `${e.status} — ${e.message}` : String(e));
+      setError(safeErrorMessage(e));
       setPhase("error");
     }
   }

@@ -17,6 +17,7 @@ runner's CLI uses.
 from __future__ import annotations
 
 import os
+import threading
 import time
 from typing import Annotated
 
@@ -30,9 +31,12 @@ from detective.runner import run_all_checks
 # /compliance-score together (and dev StrictMode double-fetches), so without this
 # a single page load would trigger several serial scans. Cache the scan result
 # briefly so those requests reuse one scan. Single-account app -> a global key is
-# safe; 30s freshness is fine for a compliance dashboard.
+# safe; 60s freshness is fine for a compliance dashboard.
 _SCAN_TTL_SECONDS = 60.0
 _scan_cache: dict[str, tuple[float, list[Finding]]] = {}
+# Serializes the miss -> scan -> store sequence so concurrent cache misses don't
+# each launch their own full scan (FastAPI runs sync endpoints in a threadpool).
+_scan_lock = threading.Lock()
 
 
 def _build_session() -> boto3.Session:
@@ -78,10 +82,17 @@ def get_findings(session: Annotated[boto3.Session, Depends(get_session)]) -> lis
     Serves a cached scan when one is fresh (< _SCAN_TTL_SECONDS), so a dashboard
     load doesn't fan out into several serial multi-region scans.
     """
-    now = time.monotonic()
     cached = _scan_cache.get("all")
-    if cached is not None and now - cached[0] < _SCAN_TTL_SECONDS:
+    if cached is not None and time.monotonic() - cached[0] < _SCAN_TTL_SECONDS:
         return cached[1]
-    findings = run_all_checks(session)
-    _scan_cache["all"] = (now, findings)
-    return findings
+
+    with _scan_lock:
+        # Re-check inside the lock: another thread may have scanned while we
+        # waited, so we reuse its fresh result instead of scanning again.
+        cached = _scan_cache.get("all")
+        if cached is not None and time.monotonic() - cached[0] < _SCAN_TTL_SECONDS:
+            return cached[1]
+        findings = run_all_checks(session)
+        # Timestamp AFTER the scan — a slow scan shouldn't be born already expired.
+        _scan_cache["all"] = (time.monotonic(), findings)
+        return findings
