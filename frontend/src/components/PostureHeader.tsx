@@ -76,7 +76,9 @@ export function PostureHeader({ score, loading, error, onRetry }: PostureHeaderP
         <div className="text-right">
           <p className="font-mono text-xs uppercase tracking-wider text-ink-faint">Compliance score</p>
           <p className="mt-1 text-5xl font-semibold tabular-nums text-ink">
-            {score.compliance_score_pct === null ? (
+            {/* Hide the headline % on any incomplete scan: a number next to
+                un-evaluated controls overstates confidence. */}
+            {score.compliance_score_pct === null || errors > 0 ? (
               <span className="text-3xl text-ink-dim">n/a</span>
             ) : (
               <>

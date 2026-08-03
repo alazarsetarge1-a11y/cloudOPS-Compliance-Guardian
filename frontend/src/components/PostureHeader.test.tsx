@@ -70,4 +70,15 @@ describe("PostureHeader", () => {
     expect(screen.getByText("n/a")).toBeInTheDocument();
     expect(screen.queryByText("%")).not.toBeInTheDocument();
   });
+
+  it("suppresses the % on a partial scan (some evaluable + some errored)", () => {
+    const partial = score({
+      by_status: { COMPLIANT: 2, NON_COMPLIANT: 1, ERROR: 1 },
+      non_compliant_by_severity: { CRITICAL: 0, HIGH: 1, MEDIUM: 0, LOW: 0 },
+      compliance_score_pct: 66.7,
+    });
+    render(<PostureHeader score={partial} loading={false} error={null} onRetry={() => {}} />);
+    expect(screen.getByText("n/a")).toBeInTheDocument();
+    expect(screen.queryByText("%")).not.toBeInTheDocument();
+  });
 });
