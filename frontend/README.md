@@ -1,16 +1,54 @@
 # Frontend — React Dashboard
 
-Visualizes findings from the Detective layer, remediation history from the
-Corrective layer, and an IAM risk heatmap.
+Vite + React + TypeScript + Tailwind. Consumes the backend API (findings, score,
+gated remediation) and renders the compliance posture. Design rules live in the
+`dashboard-design-system` skill: semantic tokens (never raw hex/px), a deliberate
+visual hierarchy, and every data view implements loading / error / empty / loaded.
 
-## Planned views
+## Views
 
-- Findings dashboard — list/filter compliance findings by severity/resource type
-- IAM heatmap — visual risk map of IAM users/roles
-- Remediation timeline — history of what got auto-fixed and when
-- Architecture view — the preventive/detective/corrective diagram, live in the app
+- **Posture header** — the dominant "is anything on fire?" element (critical+high
+  count) + the compliance score + severity breakdown.
+- **Findings list** — a designed table: severity stripe as the leading anchor,
+  sorted severity-first, status filters, rows expand to reveal the evidence
+  payload + ARN + detail.
+- **Remediation action** — inside a finding: **Preview** (dry run → the plan),
+  then **Apply** — the corrective loop, from the browser. Auto-fixable findings
+  get an Apply button; notify-only findings show "flagged for manual review".
 
-## Status
+Planned next (each needs a backend prerequisite first): **IAM risk heatmap**
+(needs richer IAM dimensions in the detective layer) and **remediation timeline**
+(needs a persistence layer for history).
 
-Not yet started. Fifth layer to build, once the backend API has real data to
-render.
+## Architecture
+
+- **Tokens** (`src/index.css` + `tailwind.config.js`): CSS custom properties
+  surfaced as semantic Tailwind classes; dark mode is a variable swap.
+- **Data layer**: a typed `apiGet`/`apiPost` client (`src/lib/api.ts`) adds the
+  base URL + `X-API-Key`; hooks (`useApiResource`, `useFindings`,
+  `useComplianceScore`, `useRemediation`) own fetching. Components are
+  presentational — they take props and never fetch.
+
+## Configuration
+
+Copy `.env.example` to `.env.local` and set:
+
+| Var | Purpose |
+|---|---|
+| `VITE_API_BASE` | backend base URL (default `http://localhost:8000`) |
+| `VITE_API_KEY` | the `X-API-Key` sent on every request |
+
+**`VITE_*` vars are inlined into the build — not secret.** The key only gates
+casual access in dev; production would front the API with real user auth
+(Cognito), not a browser-embedded key.
+
+## Run it
+
+```bash
+npm install
+npm run dev     # http://localhost:5173
+npm run build   # typecheck (tsc) + production build
+```
+
+The backend must be running with CORS allowing the dev origin (see the backend
+README) and reachable at `VITE_API_BASE`.
