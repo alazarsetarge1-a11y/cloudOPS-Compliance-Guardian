@@ -1,0 +1,2 @@
+# Copy to terraform.tfvars (gitignored) and fill in the real member account id.
+member_account_id = "222222222222"
