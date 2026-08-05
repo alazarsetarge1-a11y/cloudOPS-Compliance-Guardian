@@ -31,3 +31,9 @@ variable "app_port" {
   type        = number
   default     = 8000
 }
+
+variable "image_tag" {
+  description = "ECR image tag to deploy (defaults to the git SHA pushed in Stage 1)."
+  type        = string
+  default     = "524e02b"
+}

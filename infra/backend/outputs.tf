@@ -18,3 +18,8 @@ output "task_security_group_id" {
   description = "SG for the Fargate task ENI — admits only the ALB SG."
   value       = aws_security_group.task.id
 }
+
+output "alb_dns_name" {
+  description = "Public DNS of the ALB — hit http://<this>/health to test Stage 3."
+  value       = aws_lb.backend.dns_name
+}
