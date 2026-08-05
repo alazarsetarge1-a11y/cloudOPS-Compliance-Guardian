@@ -1,0 +1,15 @@
+# Keep the build context small and secret-free. The context is the repo root,
+# so exclude everything the backend image has no business shipping.
+**/.venv
+**/node_modules
+**/__pycache__
+**/.git
+**/*.tfstate*
+**/.terraform
+**/.env*
+**/.pytest_cache
+**/.ruff_cache
+**/.DS_Store
+
+# The React app ships separately to S3 in Stage 4 — never in the API image.
+frontend
