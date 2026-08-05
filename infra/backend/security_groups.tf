@@ -19,6 +19,18 @@ resource "aws_vpc_security_group_ingress_rule" "alb_https" {
   cidr_ipv4         = "0.0.0.0/0"
 }
 
+# TEMPORARY: direct HTTP testing in Stage 3. Removed in Stage 4 when CloudFront +
+# HTTPS front the ALB and ingress is locked to the CloudFront origin-facing prefix list.
+resource "aws_vpc_security_group_ingress_rule" "alb_http" {
+  # checkov:skip=CKV_AWS_260:Temporary port-80 ingress for Stage 3 testing; removed in Stage 4 when ingress is locked to the CloudFront prefix list.
+  security_group_id = aws_security_group.alb.id
+  description       = "HTTP from the internet - TEMPORARY for Stage 3 direct testing"
+  ip_protocol       = "tcp"
+  from_port         = 80
+  to_port           = 80
+  cidr_ipv4         = "0.0.0.0/0"
+}
+
 resource "aws_vpc_security_group_egress_rule" "alb_all" {
   security_group_id = aws_security_group.alb.id
   description       = "All egress (forward to the task ENIs)"
