@@ -16,16 +16,20 @@ runner's CLI uses.
 
 from __future__ import annotations
 
+import logging
 import os
 import threading
 import time
 from typing import Annotated
 
 import boto3
-from fastapi import Depends
+from botocore.exceptions import BotoCoreError, ClientError
+from fastapi import Depends, HTTPException, status
 
 from detective.checks.base import Finding
 from detective.runner import run_all_checks
+
+logger = logging.getLogger(__name__)
 
 # A full scan sweeps every region and is slow. The dashboard loads /findings AND
 # /compliance-score together (and dev StrictMode double-fetches), so without this
@@ -67,8 +71,23 @@ def get_session() -> boto3.Session:
     Built per request (not cached) so assumed-role credentials can't go stale.
     Tests override this via ``app.dependency_overrides[get_session]`` so no unit
     test ever touches real AWS.
+
+    On a credential/STS failure (expired local creds, assume-role denied, no
+    network) we raise a clean 503 rather than let a boto exception become a bare
+    500. A raised HTTPException is handled INSIDE the CORS middleware, so the 503
+    carries CORS headers and the browser sees a real status (and the dashboard's
+    "backend offline" state) instead of an opaque "Failed to fetch".
     """
-    return _build_session()
+    try:
+        return _build_session()
+    except (BotoCoreError, ClientError) as exc:
+        # Log the real cause server-side; never surface it — boto messages can
+        # carry ARNs / account ids.
+        logger.warning("Could not establish an AWS session: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="The compliance backend could not reach AWS.",
+        ) from exc
 
 
 def get_findings(session: Annotated[boto3.Session, Depends(get_session)]) -> list[Finding]:
