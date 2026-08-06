@@ -43,3 +43,15 @@ def require_api_key(provided: Annotated[str | None, Security(_api_key_header)]) 
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or missing API key.",
         )
+
+
+# --- Cognito seam (documented, not built) -------------------------------------
+# The current model is a single shared API key (X-API-Key) — enough for a
+# single-user portfolio demo. To add real per-user auth WITHOUT disturbing callers:
+#   1. Stand up a Cognito User Pool; the SPA logs in and receives a short-lived JWT.
+#   2. Add a `require_user` dependency that validates the JWT against the pool's
+#      JWKS (signature, issuer, audience, exp) — mirroring how `require_api_key`
+#      guards routes via `dependencies=[Depends(require_user)]`.
+#   3. Compose, don't replace: CloudFront's injected X-API-Key stays the origin-
+#      trust check (CloudFront -> ALB), and `require_user` adds "who is the caller".
+# `require_api_key` is a standalone dependency precisely so this layers on top.

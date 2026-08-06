@@ -35,7 +35,7 @@ resource "aws_iam_role_policy_attachment" "execution_managed" {
 data "aws_iam_policy_document" "execution_secrets" {
   statement {
     actions   = ["secretsmanager:GetSecretValue"]
-    resources = [aws_secretsmanager_secret.api_key.arn]
+    resources = [data.aws_secretsmanager_secret.api_key.arn]
   }
 }
 

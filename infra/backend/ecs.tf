@@ -57,7 +57,7 @@ resource "aws_ecs_task_definition" "backend" {
       # sets it as CCG_API_KEY in the container env. The value is never in the image
       # or the task def — only the secret's ARN is.
       secrets = [
-        { name = "CCG_API_KEY", valueFrom = aws_secretsmanager_secret.api_key.arn }
+        { name = "CCG_API_KEY", valueFrom = data.aws_secretsmanager_secret.api_key.arn }
       ]
 
       logConfiguration = {

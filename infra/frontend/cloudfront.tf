@@ -1,9 +1,5 @@
-# The API key CloudFront injects on the /api origin — read from Secrets Manager so
-# it always matches what the backend expects. Lives in CloudFront config + TF state
-# (local, gitignored), never in the browser. This IS the BFF.
-data "aws_secretsmanager_secret_version" "api_key" {
-  secret_id = "ccg/backend/api-key"
-}
+# The API-key value CloudFront injects (from the secret this stack now owns — see
+# secrets.tf) is set on the /api origin's custom_header below. This IS the BFF.
 
 # Managed policies (referenced by name so we don't hardcode ids).
 data "aws_cloudfront_cache_policy" "optimized" {
@@ -69,7 +65,7 @@ resource "aws_cloudfront_distribution" "site" {
 
     custom_header {
       name  = "X-API-Key"
-      value = data.aws_secretsmanager_secret_version.api_key.secret_string
+      value = aws_secretsmanager_secret_version.api_key.secret_string
     }
   }
 
