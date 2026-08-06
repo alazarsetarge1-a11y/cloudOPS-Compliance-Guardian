@@ -1,5 +1,5 @@
 variable "region" {
-  description = "AWS region for the deployment (single-region by design)."
+  description = "AWS region. Must be us-east-1 for CloudFront's ACM certificate."
   type        = string
   default     = "us-east-1"
 }
@@ -20,26 +20,8 @@ variable "member_account_id" {
   }
 }
 
-variable "vpc_cidr" {
-  description = "CIDR block for the dedicated VPC."
-  type        = string
-  default     = "10.0.0.0/16"
-}
-
-variable "app_port" {
-  description = "Port the FastAPI container listens on (matches the Dockerfile EXPOSE/uvicorn port)."
-  type        = number
-  default     = 8000
-}
-
-variable "image_tag" {
-  description = "ECR image tag to deploy (defaults to the git SHA pushed in Stage 1)."
-  type        = string
-  default     = "524e02b"
-}
-
 variable "domain_name" {
-  description = "Registered apex domain (the ALB is exposed at api.<domain>)."
+  description = "Registered apex domain served by CloudFront (also serves www.<domain>)."
   type        = string
   default     = "cloud-compliance-guardian.com"
 }
