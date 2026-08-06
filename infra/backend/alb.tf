@@ -3,7 +3,7 @@
 resource "aws_lb" "backend" {
   # checkov:skip=CKV_AWS_150:Ephemeral stack — deletion protection off so `terraform destroy` works between demos.
   # checkov:skip=CKV_AWS_91:Access logging to S3 omitted for cost in this sandbox.
-  # checkov:skip=CKV2_AWS_20:HTTP->HTTPS redirect + HTTPS listener arrive in Stage 4 with CloudFront + the ACM cert.
+  # checkov:skip=CKV2_AWS_20:ALB is CloudFront-only over HTTPS; no public HTTP listener exists to redirect.
   # checkov:skip=CKV2_AWS_28:WAF deliberately skipped (right-sized for a portfolio; backend is only live during demos).
   name                       = "ccg-backend"
   load_balancer_type         = "application"
@@ -31,20 +31,5 @@ resource "aws_lb_target_group" "backend" {
     timeout             = 5
     healthy_threshold   = 2
     unhealthy_threshold = 3
-  }
-}
-
-# HTTP listener for Stage 3 testing. Stage 4 replaces this with an HTTPS listener
-# (ACM cert) behind CloudFront.
-resource "aws_lb_listener" "http" {
-  # checkov:skip=CKV_AWS_2:Temporary HTTP listener for Stage 3 testing; replaced by HTTPS + ACM cert in Stage 4.
-  # checkov:skip=CKV_AWS_103:No TLS on this temporary HTTP listener; TLS 1.2+ arrives with the HTTPS listener in Stage 4.
-  load_balancer_arn = aws_lb.backend.arn
-  port              = 80
-  protocol          = "HTTP"
-
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.backend.arn
   }
 }

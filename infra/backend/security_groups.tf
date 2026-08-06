@@ -1,6 +1,10 @@
-# ALB security group — the public entry point. For now allow HTTPS from anywhere
-# so we can test end-to-end at Stage 3; Stage 4 tightens ingress to CloudFront's
-# origin-facing managed prefix list so the ALB can't be reached around the CDN.
+# CloudFront's origin-facing edge IPs — the ALB admits HTTPS only from these, so it
+# cannot be reached around the CDN.
+data "aws_ec2_managed_prefix_list" "cloudfront" {
+  name = "com.amazonaws.global.cloudfront.origin-facing"
+}
+
+# ALB security group — the public entry point, reachable ONLY through CloudFront.
 resource "aws_security_group" "alb" {
   # checkov:skip=CKV2_AWS_5:Attached to the ALB in Stage 3 — this ephemeral stack is built incrementally in the same dir.
   name        = "ccg-backend-alb"
@@ -12,23 +16,11 @@ resource "aws_security_group" "alb" {
 
 resource "aws_vpc_security_group_ingress_rule" "alb_https" {
   security_group_id = aws_security_group.alb.id
-  description       = "HTTPS from the internet (tightened to the CloudFront prefix list in Stage 4)"
+  description       = "HTTPS from CloudFront edge IPs only (origin-facing prefix list)"
   ip_protocol       = "tcp"
   from_port         = 443
   to_port           = 443
-  cidr_ipv4         = "0.0.0.0/0"
-}
-
-# TEMPORARY: direct HTTP testing in Stage 3. Removed in Stage 4 when CloudFront +
-# HTTPS front the ALB and ingress is locked to the CloudFront origin-facing prefix list.
-resource "aws_vpc_security_group_ingress_rule" "alb_http" {
-  # checkov:skip=CKV_AWS_260:Temporary port-80 ingress for Stage 3 testing; removed in Stage 4 when ingress is locked to the CloudFront prefix list.
-  security_group_id = aws_security_group.alb.id
-  description       = "HTTP from the internet - TEMPORARY for Stage 3 direct testing"
-  ip_protocol       = "tcp"
-  from_port         = 80
-  to_port           = 80
-  cidr_ipv4         = "0.0.0.0/0"
+  prefix_list_id    = data.aws_ec2_managed_prefix_list.cloudfront.id
 }
 
 resource "aws_vpc_security_group_egress_rule" "alb_all" {

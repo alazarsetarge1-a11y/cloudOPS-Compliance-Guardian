@@ -24,5 +24,5 @@ resource "aws_ecs_service" "backend" {
   health_check_grace_period_seconds = 60
 
   # The target group must be attached to a listener before the service registers.
-  depends_on = [aws_lb_listener.http]
+  depends_on = [aws_lb_listener.https]
 }
