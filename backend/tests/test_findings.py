@@ -8,6 +8,7 @@ validation, summarization) is tested offline and deterministically.
 import pytest
 from app.dependencies import get_findings
 from app.main import app
+from botocore.exceptions import ClientError
 from fastapi.testclient import TestClient
 
 from detective.checks.base import Finding, Severity, Status
@@ -98,3 +99,25 @@ def test_score_is_none_when_only_errors(client):
 
 def test_health_is_open(client):
     assert client.get("/health").json() == {"status": "ok"}
+
+
+def test_credential_failure_returns_clean_503(monkeypatch):
+    # When the boto session can't be built (expired creds / assume-role denied),
+    # get_session must convert the boto exception into a 503 — NOT let it become a
+    # bare 500 (which, past the CORS middleware, shows the browser "Failed to
+    # fetch"). No get_findings override here, so the real get_session runs.
+    from app import dependencies
+
+    monkeypatch.setenv("CCG_API_KEY", API_KEY)
+
+    def boom():
+        raise ClientError(
+            {"Error": {"Code": "ExpiredToken", "Message": "creds expired"}}, "AssumeRole"
+        )
+
+    monkeypatch.setattr(dependencies, "_build_session", boom)
+    r = TestClient(app).get("/findings", headers=AUTH)
+    assert r.status_code == 503
+    assert "AWS" in r.json()["detail"]
+    # The raw boto error must not leak to the client.
+    assert "ExpiredToken" not in r.text
