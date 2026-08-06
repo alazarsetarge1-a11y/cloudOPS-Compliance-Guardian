@@ -4,7 +4,11 @@
  */
 
 const BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:8000";
-const KEY = import.meta.env.VITE_API_KEY ?? "";
+// Only the local dev build reads the key; in a production build this branch is
+// dead code (import.meta.env.DEV is statically false) and is tree-shaken out, so
+// the browser bundle can never carry a secret. In production CloudFront injects
+// X-API-Key server-side.
+const KEY = import.meta.env.DEV ? (import.meta.env.VITE_API_KEY ?? "") : "";
 
 /** Carries the HTTP status so the UI can distinguish 401 (auth) from 503 (down). */
 export class ApiError extends Error {
@@ -18,10 +22,15 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
-    ...init,
-    headers: { "X-API-Key": KEY, "Content-Type": "application/json", ...init?.headers },
-  });
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...(init?.headers as Record<string, string> | undefined),
+  };
+  // Sent only by the local dev build; in production the header is absent and
+  // CloudFront adds it, so no secret ships to the browser.
+  if (KEY) headers["X-API-Key"] = KEY;
+
+  const res = await fetch(`${BASE}${path}`, { ...init, headers });
   if (!res.ok) {
     // Surface the API's `detail` message when present; fall back to the status.
     let detail = res.statusText;
@@ -56,4 +65,14 @@ export function safeErrorMessage(e: unknown): string {
     return "The request failed.";
   }
   return "Couldn't reach the API.";
+}
+
+/**
+ * Is this "the backend is unreachable" (spun down, gateway error, or a network
+ * failure) rather than a real application error? Drives the graceful "backend
+ * offline" UI instead of a scary generic error.
+ */
+export function isOfflineError(e: unknown): boolean {
+  if (e instanceof ApiError) return e.status === 502 || e.status === 503 || e.status === 504;
+  return true; // non-ApiError = fetch/network failure = couldn't reach the backend
 }
