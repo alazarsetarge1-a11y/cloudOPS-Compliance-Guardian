@@ -1,3 +1,4 @@
+import { BackendOffline } from "./components/BackendOffline";
 import { FindingsList } from "./components/FindingsList";
 import { PostureHeader } from "./components/PostureHeader";
 import { useComplianceScore } from "./hooks/useComplianceScore";
@@ -10,6 +11,15 @@ import { useFindings } from "./hooks/useFindings";
 export function App() {
   const score = useComplianceScore();
   const findings = useFindings();
+
+  // If the backend is unreachable (spun down to control cost, or a gateway
+  // error), show one clean offline notice instead of two identical error cards.
+  const offline = score.offline || findings.offline;
+  const retry = () => {
+    score.refetch();
+    findings.refetch();
+  };
+
   return (
     <div className="flex min-h-full flex-col">
       <header className="border-b border-line bg-surface-panel">
@@ -37,18 +47,24 @@ export function App() {
       </header>
 
       <main className="mx-auto w-full max-w-7xl flex-1 space-y-6 px-6 py-8">
-        <PostureHeader
-          score={score.data}
-          loading={score.loading}
-          error={score.error}
-          onRetry={score.refetch}
-        />
-        <FindingsList
-          findings={findings.data}
-          loading={findings.loading}
-          error={findings.error}
-          onRetry={findings.refetch}
-        />
+        {offline ? (
+          <BackendOffline onRetry={retry} />
+        ) : (
+          <>
+            <PostureHeader
+              score={score.data}
+              loading={score.loading}
+              error={score.error}
+              onRetry={score.refetch}
+            />
+            <FindingsList
+              findings={findings.data}
+              loading={findings.loading}
+              error={findings.error}
+              onRetry={findings.refetch}
+            />
+          </>
+        )}
       </main>
     </div>
   );

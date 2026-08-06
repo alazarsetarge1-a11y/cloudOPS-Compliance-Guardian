@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
 
-import { apiGet, safeErrorMessage } from "../lib/api";
+import { apiGet, isOfflineError, safeErrorMessage } from "../lib/api";
 
-/** The four states every data view needs, in one object. `data` is null until
- * loaded; `loading` starts true; `error` holds a message; `refetch` retries. */
+/** The states every data view needs, in one object. `data` is null until
+ * loaded; `loading` starts true; `error` holds a message; `offline` marks a
+ * backend-unreachable error; `refetch` retries. */
 export interface AsyncResource<T> {
   data: T | null;
   loading: boolean;
   error: string | null;
+  /** True when `error` is a backend-unreachable condition (drives the offline UI). */
+  offline: boolean;
   refetch: () => void;
 }
 
@@ -21,12 +24,14 @@ export function useApiResource<T>(path: string): AsyncResource<T> {
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [offline, setOffline] = useState(false);
   const [nonce, setNonce] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError(null);
+    setOffline(false);
     apiGet<T>(path)
       .then((d) => {
         if (!cancelled) setData(d);
@@ -34,6 +39,7 @@ export function useApiResource<T>(path: string): AsyncResource<T> {
       .catch((e: unknown) => {
         if (cancelled) return;
         setError(safeErrorMessage(e));
+        setOffline(isOfflineError(e));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -44,5 +50,5 @@ export function useApiResource<T>(path: string): AsyncResource<T> {
   }, [path, nonce]);
 
   const refetch = useCallback(() => setNonce((n) => n + 1), []);
-  return { data, loading, error, refetch };
+  return { data, loading, error, offline, refetch };
 }
