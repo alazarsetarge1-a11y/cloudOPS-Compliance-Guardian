@@ -5,3 +5,11 @@
 data "aws_secretsmanager_secret" "api_key" {
   name = "ccg/backend/api-key"
 }
+
+# The assistant's Anthropic API key is ALSO owned by the persistent stack (set once,
+# survives backend teardown; see infra/frontend/secrets.tf). We only READ it here to
+# inject into the task definition — the value is fetched by the execution role at
+# task start, so a placeholder-only secret still lets the container boot.
+data "aws_secretsmanager_secret" "anthropic_api_key" {
+  name = "ccg/assistant/anthropic-api-key"
+}

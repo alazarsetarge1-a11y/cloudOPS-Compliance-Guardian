@@ -31,11 +31,16 @@ resource "aws_iam_role_policy_attachment" "execution_managed" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
-# Let the agent read ONLY our one secret, so it can inject it into the container.
+# Let the agent read ONLY our two secrets (the API key + the assistant's Anthropic
+# key), so it can inject them into the container. Still least-privilege: named ARNs,
+# GetSecretValue only.
 data "aws_iam_policy_document" "execution_secrets" {
   statement {
-    actions   = ["secretsmanager:GetSecretValue"]
-    resources = [data.aws_secretsmanager_secret.api_key.arn]
+    actions = ["secretsmanager:GetSecretValue"]
+    resources = [
+      data.aws_secretsmanager_secret.api_key.arn,
+      data.aws_secretsmanager_secret.anthropic_api_key.arn,
+    ]
   }
 }
 

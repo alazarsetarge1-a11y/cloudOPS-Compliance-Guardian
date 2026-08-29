@@ -10,7 +10,7 @@ route converts one to the other with `.to_dict()`.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -75,3 +75,27 @@ class RemediationOut(BaseModel):
     summary: str
     plan: dict[str, Any]
     executed_at: datetime
+
+
+class AssistantTurn(BaseModel):
+    """One prior turn, echoed back by the client for conversational context."""
+
+    role: Literal["user", "assistant"]
+    content: str = Field(min_length=1, max_length=4000)
+
+
+class AssistantAsk(BaseModel):
+    """A question for the best-practices assistant, plus bounded prior turns.
+
+    The caps (question length, per-turn length, history length) are the input
+    guardrail: they bound cost and abuse BEFORE the request ever reaches Claude."""
+
+    question: str = Field(min_length=1, max_length=4000)
+    history: list[AssistantTurn] = Field(default_factory=list, max_length=12)
+
+
+class AssistantReply(BaseModel):
+    """The assistant's answer. Rendered as sanitized markdown/text in the UI —
+    never as raw HTML (model output is untrusted)."""
+
+    answer: str

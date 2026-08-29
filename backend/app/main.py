@@ -11,7 +11,7 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers import findings, remediations
+from app.routers import assistant, findings, remediations
 
 # The title/version/summary aren't decoration — FastAPI publishes them in the
 # OpenAPI spec and renders them at /docs, which is the API's contract.
@@ -42,6 +42,7 @@ app.add_middleware(
 # composition root: app metadata + wiring, no business logic.
 app.include_router(findings.router)
 app.include_router(remediations.router)
+app.include_router(assistant.router)
 
 
 @app.get("/health", tags=["meta"])

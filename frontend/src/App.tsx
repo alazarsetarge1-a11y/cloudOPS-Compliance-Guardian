@@ -1,3 +1,4 @@
+import { AssistantWidget } from "./components/AssistantWidget";
 import { BackendOffline } from "./components/BackendOffline";
 import { FindingsList } from "./components/FindingsList";
 import { PostureHeader } from "./components/PostureHeader";
@@ -66,6 +67,11 @@ export function App() {
           </>
         )}
       </main>
+
+      {/* Floating AI assistant. Lives at the shell level so it's available over
+          both the dashboard and the offline card. Independent of the dashboard's
+          data hooks — it's a separate concern (general guidance, no account data). */}
+      <AssistantWidget />
     </div>
   );
 }

@@ -57,7 +57,11 @@ resource "aws_ecs_task_definition" "backend" {
       # sets it as CCG_API_KEY in the container env. The value is never in the image
       # or the task def — only the secret's ARN is.
       secrets = [
-        { name = "CCG_API_KEY", valueFrom = data.aws_secretsmanager_secret.api_key.arn }
+        { name = "CCG_API_KEY", valueFrom = data.aws_secretsmanager_secret.api_key.arn },
+        # The assistant's Claude key (read by the anthropic SDK). If it's still the
+        # placeholder, the assistant returns 503 and the dashboard is unaffected —
+        # graceful degradation, not a container crash.
+        { name = "ANTHROPIC_API_KEY", valueFrom = data.aws_secretsmanager_secret.anthropic_api_key.arn },
       ]
 
       logConfiguration = {
