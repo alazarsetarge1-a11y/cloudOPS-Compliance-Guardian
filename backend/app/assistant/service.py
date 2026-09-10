@@ -39,6 +39,11 @@ def _get_client() -> anthropic.Anthropic:
 _MODEL = os.environ.get("CCG_ASSISTANT_MODEL", "claude-opus-5")
 _MAX_TOKENS = 1024  # a scoped answer, and a hard cost/abuse ceiling
 
+# Effort tuning (output_config.effort) is supported on the Opus/Sonnet/Fable tiers,
+# but Haiku 4.5 REJECTS it with a 400. Only send it for models that accept it; on
+# Haiku we make a plain call (a short best-practice Q&A needs no thinking budget).
+_MODELS_WITHOUT_EFFORT = frozenset({"claude-haiku-4-5"})
+
 _REFUSAL = (
     "I can't help with that. I answer general AWS security and compliance best-practice questions."
 )
@@ -52,18 +57,23 @@ def answer_question(question: str, history: list[dict[str, str]]) -> str:
     if the model declines). Raises anthropic errors on API failure — the route maps
     those to a 503.
     """
-    resp = _get_client().messages.create(
-        model=_MODEL,
-        max_tokens=_MAX_TOKENS,
-        output_config={"effort": "low"},  # snappy + cheap for a Q&A; thinking stays adaptive
+    request: dict[str, object] = {
+        "model": _MODEL,
+        "max_tokens": _MAX_TOKENS,
         # Frozen system prompt, prompt-cached: identical every request, so after the
         # first call the big prefix bills at ~0.1x. Volatile history/question sit
         # AFTER the cache breakpoint.
-        system=[
+        "system": [
             {"type": "text", "text": SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}},
         ],
-        messages=[*history, {"role": "user", "content": question}],
-    )
+        "messages": [*history, {"role": "user", "content": question}],
+    }
+    # Low effort = snappy + cheap for a Q&A (adaptive thinking stays on under it) — but
+    # only on models that accept the knob; Haiku 4.5 would 400 on it, so we omit it there.
+    if _MODEL not in _MODELS_WITHOUT_EFFORT:
+        request["output_config"] = {"effort": "low"}
+
+    resp = _get_client().messages.create(**request)
 
     # Opus 5 safety classifiers can decline (HTTP 200, stop_reason="refusal") —
     # check before reading content, and return a fixed safe message.

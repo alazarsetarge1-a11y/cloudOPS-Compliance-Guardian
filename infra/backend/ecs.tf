@@ -50,7 +50,12 @@ resource "aws_ecs_task_definition" "backend" {
       # once the CloudFront domain exists. No CCG_ASSUME_ROLE_ARN — in the member
       # account the task role IS the identity.)
       environment = [
-        { name = "CCG_AWS_REGION", value = var.region }
+        { name = "CCG_AWS_REGION", value = var.region },
+        # Cheaper model for the assistant (Haiku 4.5) — ~an order of magnitude less than
+        # the code default (Opus 5), and plenty for a best-practices Q&A. Overriding this
+        # is a task-def change, not a code change. NOTE: the service omits the effort
+        # knob for Haiku (it 400s on output_config.effort).
+        { name = "CCG_ASSISTANT_MODEL", value = "claude-haiku-4-5" },
       ]
 
       # Secret injection: the EXECUTION role fetches this from Secrets Manager and

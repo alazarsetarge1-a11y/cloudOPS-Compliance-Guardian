@@ -96,3 +96,35 @@ def test_input_caps_reject_oversized_and_empty(client):
     long_history = [{"role": "user", "content": "q"}] * 20
     body = {"question": "hi", "history": long_history}
     assert client.post("/assistant/ask", headers=AUTH, json=body).status_code == 422
+
+
+class _Recorder:
+    """A fake client that captures the kwargs passed to messages.create."""
+
+    def __init__(self) -> None:
+        self.kwargs: dict | None = None
+        self.messages = self
+
+    def create(self, **kwargs):
+        self.kwargs = kwargs
+        return _Resp("ok")
+
+
+def test_effort_omitted_for_haiku(client, monkeypatch):
+    # Haiku 4.5 rejects output_config.effort with a 400, so the service must not send it.
+    rec = _Recorder()
+    monkeypatch.setattr(service, "_client", rec)
+    monkeypatch.setattr(service, "_MODEL", "claude-haiku-4-5")
+    r = client.post("/assistant/ask", headers=AUTH, json={"question": "hi"})
+    assert r.status_code == 200
+    assert "output_config" not in rec.kwargs
+
+
+def test_effort_sent_for_opus(client, monkeypatch):
+    # Opus/Sonnet/Fable support the effort knob — keep it for cheap, snappy answers.
+    rec = _Recorder()
+    monkeypatch.setattr(service, "_client", rec)
+    monkeypatch.setattr(service, "_MODEL", "claude-opus-5")
+    r = client.post("/assistant/ask", headers=AUTH, json={"question": "hi"})
+    assert r.status_code == 200
+    assert rec.kwargs["output_config"] == {"effort": "low"}
