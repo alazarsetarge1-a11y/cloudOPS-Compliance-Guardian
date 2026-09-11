@@ -87,7 +87,11 @@ repos:
     rev: 3.2.492
     hooks:
       - id: checkov
-        args: [--quiet, --compact, --skip-path, frontend/]
+        # Skip the React frontend/ (no IaC) and demo-violations/ — the latter is
+        # INTENTIONALLY insecure fixtures whose findings belong to the runtime
+        # detective layer, not this static scan (see demo-violations/README.md).
+        # CI's `checkov -d infra` already excludes both by only scanning infra/.
+        args: [--quiet, --compact, --skip-path, frontend/, --skip-path, demo-violations/]
 
   # ---------------------------------------------------------------------
   # GitHub Actions workflow linting.
