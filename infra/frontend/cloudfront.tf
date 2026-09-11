@@ -36,13 +36,51 @@ function handler(event) {
 EOT
 }
 
+# Security response headers for the app (HSTS+preload, nosniff, frame-deny,
+# referrer policy), attached to the cache behaviors below so every viewer response
+# carries them. No CSP here — it needs per-app tuning and would risk breaking the SPA.
+resource "aws_cloudfront_response_headers_policy" "security" {
+  name = "ccg-security-headers"
+
+  security_headers_config {
+    strict_transport_security {
+      access_control_max_age_sec = 63072000 # 2 years
+      include_subdomains         = true
+      preload                    = true
+      override                   = true
+    }
+    content_type_options {
+      override = true # X-Content-Type-Options: nosniff
+    }
+    frame_options {
+      frame_option = "DENY"
+      override     = true
+    }
+    referrer_policy {
+      referrer_policy = "strict-origin-when-cross-origin"
+      override        = true
+    }
+  }
+}
+
 resource "aws_cloudfront_distribution" "site" {
+  # checkov:skip=CKV_AWS_68:No WAF — public static portfolio site; WAF is per-request cost not warranted for a sandbox. Enable before prod.
+  # checkov:skip=CKV2_AWS_47:No WAFv2 Log4j AMR — follows from no WAF (above).
+  # checkov:skip=CKV_AWS_310:No origin failover — single-origin demo; a failover group needs a second origin. Enable before prod.
+  # checkov:skip=CKV_AWS_374:No geo restriction — the portfolio site is intentionally globally reachable.
   enabled             = true
   is_ipv6_enabled     = true
   default_root_object = "index.html"
   aliases             = [var.domain_name, "www.${var.domain_name}"]
   price_class         = "PriceClass_100" # US/EU edges only — cost control
   comment             = "CCG frontend"
+
+  # Standard viewer-access logs → the dedicated private log bucket (see logs.tf).
+  logging_config {
+    bucket          = aws_s3_bucket.logs.bucket_domain_name
+    prefix          = "cloudfront/"
+    include_cookies = false
+  }
 
   # Static app from the private S3 bucket.
   origin {
@@ -71,24 +109,26 @@ resource "aws_cloudfront_distribution" "site" {
 
   # Default: serve the static app, cached at the edge.
   default_cache_behavior {
-    target_origin_id       = "s3-site"
-    viewer_protocol_policy = "redirect-to-https"
-    allowed_methods        = ["GET", "HEAD", "OPTIONS"]
-    cached_methods         = ["GET", "HEAD"]
-    cache_policy_id        = data.aws_cloudfront_cache_policy.optimized.id
-    compress               = true
+    target_origin_id           = "s3-site"
+    viewer_protocol_policy     = "redirect-to-https"
+    allowed_methods            = ["GET", "HEAD", "OPTIONS"]
+    cached_methods             = ["GET", "HEAD"]
+    cache_policy_id            = data.aws_cloudfront_cache_policy.optimized.id
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.security.id
+    compress                   = true
   }
 
   # /api/* -> the ALB origin: never cache, forward the full request.
   ordered_cache_behavior {
-    path_pattern             = "/api/*"
-    target_origin_id         = "api-alb"
-    viewer_protocol_policy   = "redirect-to-https"
-    allowed_methods          = ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"]
-    cached_methods           = ["GET", "HEAD"]
-    cache_policy_id          = data.aws_cloudfront_cache_policy.disabled.id
-    origin_request_policy_id = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id
-    compress                 = true
+    path_pattern               = "/api/*"
+    target_origin_id           = "api-alb"
+    viewer_protocol_policy     = "redirect-to-https"
+    allowed_methods            = ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"]
+    cached_methods             = ["GET", "HEAD"]
+    cache_policy_id            = data.aws_cloudfront_cache_policy.disabled.id
+    origin_request_policy_id   = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.security.id
+    compress                   = true
 
     function_association {
       event_type   = "viewer-request"
