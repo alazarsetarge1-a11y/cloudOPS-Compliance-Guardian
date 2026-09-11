@@ -1,0 +1,6 @@
+# Copy to terraform.tfvars (gitignored) and set the real member account id.
+member_account_id = "000000000000"
+
+# Optional overrides:
+# region  = "us-east-1"
+# profile = "ccg"
