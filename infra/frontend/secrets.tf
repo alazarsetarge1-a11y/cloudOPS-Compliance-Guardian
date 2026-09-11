@@ -47,7 +47,7 @@ resource "aws_secretsmanager_secret" "anthropic_api_key" {
 
 resource "aws_secretsmanager_secret_version" "anthropic_api_key" {
   secret_id     = aws_secretsmanager_secret.anthropic_api_key.id
-  secret_string = "unset-set-via-put-secret-value" # placeholder; real key set out-of-band
+  secret_string = "unset" # placeholder; real key set out-of-band via put-secret-value
 
   lifecycle {
     # The real key is set with `aws secretsmanager put-secret-value` (see above), which
