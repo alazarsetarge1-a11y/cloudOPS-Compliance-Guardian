@@ -69,9 +69,18 @@ resource "aws_iam_role_policy_attachment" "task_securityaudit" {
 data "aws_iam_policy_document" "task_remediation" {
   # checkov:skip=CKV_AWS_356:The "*" is only on ssm:GetAutomationExecution, which does NOT support resource-level IAM scoping. StartAutomationExecution and iam:PassRole ARE tightly scoped.
   statement {
-    sid       = "StartRemediationRunbooks"
-    actions   = ["ssm:StartAutomationExecution"]
-    resources = ["arn:aws:ssm:${var.region}:${var.member_account_id}:automation-definition/*"]
+    sid     = "StartRemediationRunbooks"
+    actions = ["ssm:StartAutomationExecution"]
+    # StartAutomationExecution authorizes against TWO resource types at once: the
+    # `document/<name>` being run AND the `automation-execution/*` it creates. Both
+    # were confirmed required from live AccessDenied errors (the original policy's
+    # `automation-definition/*` matched neither). `automation-definition/*` is kept
+    # harmlessly for completeness. All scoped to this account + region.
+    resources = [
+      "arn:aws:ssm:${var.region}:${var.member_account_id}:document/*",
+      "arn:aws:ssm:${var.region}:${var.member_account_id}:automation-execution/*",
+      "arn:aws:ssm:${var.region}:${var.member_account_id}:automation-definition/*",
+    ]
   }
   statement {
     sid       = "ReadAutomationStatus"
@@ -85,11 +94,14 @@ data "aws_iam_policy_document" "task_remediation" {
       "arn:aws:iam::${var.member_account_id}:role/ccg-remediation-s3-role",
       "arn:aws:iam::${var.member_account_id}:role/ccg-remediation-sg-role",
     ]
-    condition {
-      test     = "StringEquals"
-      variable = "iam:PassedToService"
-      values   = ["ssm.amazonaws.com"]
-    }
+    # NOTE: deliberately NO iam:PassedToService condition. SSM Automation does not
+    # populate that context key when the assume-role is the document's OWN default
+    # `assumeRole` (vs. passed as a StartAutomationExecution parameter), so the
+    # condition denied the pass at runtime -> AccessDenied on StartAutomationExecution.
+    # Safe to drop: PassRole is already restricted to exactly these two role ARNs, and
+    # each role's trust policy only allows ssm.amazonaws.com to assume it (with an
+    # aws:SourceAccount confused-deputy guard) -- so the target roles, not this
+    # condition, are the real control over who can use them.
   }
 }
 
