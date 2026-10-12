@@ -100,3 +100,39 @@ rule — S3 public access, open security groups, IAM/root MFA, RDS encryption, t
 compliance) that scan the live account on demand and return uniform `Finding` objects,
 failing toward flagging (`ERROR`, never a silent pass) when a resource can't be
 evaluated.
+
+## Backend — the API contract (Pydantic)
+
+The FastAPI backend uses **Pydantic models as the single source of truth for the API
+contract**. Each request/response shape (`FindingOut`, `RemediationRequest`,
+`AssistantAsk`, …) is declared once as a typed class, and FastAPI derives three things
+from that one definition: validation in, serialization out, and the OpenAPI docs.
+
+**Gating data IN (validation).** A model's field constraints *are* the input guardrail:
+
+```python
+class RemediationRequest(BaseModel):
+    check_id: str = Field(min_length=1, max_length=64)
+    resource_id: str = Field(min_length=1, max_length=256)
+    apply: bool = False
+```
+
+A `POST /remediations` body that is missing `check_id`, sends a number instead of a
+string, or exceeds the length cap is rejected with a `422` automatically, *before* the
+route runs. (The `AssistantAsk` caps — `question` ≤ 4000 chars, `history` ≤ 12 turns —
+are the same mechanism, bounding LLM cost/abuse before the request ever reaches Claude.)
+
+**Shaping data OUT (serialization) → the JSON the frontend reads.** The route returns
+`FindingOut` objects and Pydantic emits JSON in exactly the declared shape:
+
+```json
+{ "check_id": "s3-public-access", "status": "NON_COMPLIANT", "severity": "HIGH", "...": "..." }
+```
+
+**Pydantic is backend-only.** The frontend never imports it — it consumes that JSON,
+with **TypeScript types that hand-mirror the same shapes** (`status` is `"COMPLIANT" |
+"NON_COMPLIANT" | "ERROR"`, etc.). Those TS types are a separate copy kept in sync
+manually: change a Pydantic model and you must update the matching TypeScript type, or
+the two drift. Net: **Pydantic does runtime validation on the backend (data in *and*
+out); TypeScript gives compile-time safety on the frontend**, trusting the shape Pydantic
+guarantees.
