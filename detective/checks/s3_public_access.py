@@ -14,11 +14,11 @@ import boto3
 from botocore.exceptions import ClientError
 
 from detective.checks.base import (
-    BOTO_CONFIG,
     Finding,
     Severity,
     Status,
     account_id_of,
+    make_client,
 )
 
 CHECK_ID = "s3-public-access"
@@ -34,7 +34,7 @@ _BPA_FLAGS = (
 
 def run(session: boto3.Session) -> list[Finding]:
     """Evaluate every S3 bucket for effective (account + bucket) public-access protection."""
-    s3 = session.client("s3", config=BOTO_CONFIG)  # one client, reused for all buckets
+    s3 = make_client(session, "s3")  # one client, reused for all buckets
     account = account_id_of(session)
     account_bpa = _account_level_bpa(session, account)  # read once, applies to every bucket
     return [_evaluate_bucket(s3, account, account_bpa, name) for name in _all_bucket_names(s3)]
@@ -55,7 +55,7 @@ def _account_level_bpa(session: boto3.Session, account: str) -> dict[str, bool]:
     """Account-wide BPA flags (via s3control). Missing config or no read access →
     assume no account-level protection, i.e. evaluate on bucket-level alone
     (fail toward flagging for review, never toward a false pass)."""
-    s3control = session.client("s3control", region_name="us-east-1", config=BOTO_CONFIG)
+    s3control = make_client(session, "s3control", region_name="us-east-1")
     try:
         cfg = s3control.get_public_access_block(AccountId=account)["PublicAccessBlockConfiguration"]
         return {flag: cfg.get(flag, False) for flag in _BPA_FLAGS}

@@ -22,6 +22,7 @@ import json
 import logging
 import sys
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 import boto3
@@ -49,7 +50,15 @@ CHECKS = [
 
 
 def run_all_checks(session: boto3.Session) -> list[Finding]:
-    """Run every registered check against the session and combine the findings."""
+    """Run every registered check against the session and combine the findings.
+
+    The checks are independent and network-bound, so they run concurrently on a
+    thread pool. Each regional check also fans its own per-region work out across
+    threads; this outer pool overlaps the checks themselves, so the whole scan
+    takes about as long as the single slowest check rather than the sum of all
+    five. Every client is built through base.make_client, which serializes client
+    creation — the one shared-session hazard this concurrency introduces.
+    """
     # Resolve the account id inside the resilience boundary: if STS itself is
     # denied/unavailable, we still want the per-check ERROR findings below rather
     # than crashing the whole scan with no machine-readable output.
@@ -57,14 +66,21 @@ def run_all_checks(session: boto3.Session) -> list[Finding]:
         account = account_id_of(session)
     except Exception:
         account = "unknown"
-    findings: list[Finding] = []
-    for check in CHECKS:
+
+    def run_one(check: Any) -> list[Finding]:
+        # Orchestration-level catch: one check's crash must not abort the scan or
+        # silently drop that control. Surface it as an ERROR finding instead.
         try:
-            findings.extend(check.run(session))
+            return check.run(session)
         except Exception as exc:
-            # Orchestration-level catch: one check's crash must not abort the
-            # scan or silently drop that control. Surface it as an ERROR finding.
-            findings.append(_check_failed(check.CHECK_ID, account, exc))
+            return [_check_failed(check.CHECK_ID, account, exc)]
+
+    findings: list[Finding] = []
+    with ThreadPoolExecutor(max_workers=len(CHECKS)) as pool:
+        # map() keeps CHECKS order in the combined output; run_one catches every
+        # exception, so iteration here never raises.
+        for check_findings in pool.map(run_one, CHECKS):
+            findings.extend(check_findings)
     return findings
 
 
