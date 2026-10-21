@@ -101,6 +101,34 @@ compliance) that scan the live account on demand and return uniform `Finding` ob
 failing toward flagging (`ERROR`, never a silent pass) when a resource can't be
 evaluated.
 
+### Scan performance — fan-out concurrency
+
+The on-demand scan was **network-bound, not CPU-bound**: three of the five checks are
+regional and walked every enabled region (~17) one `describe_*` call at a time, and the five
+checks ran serially — roughly 50 blocking AWS round-trips stacked end to end, the CPU idle
+waiting on each socket. That is exactly the case **thread-based concurrency** is built for: a
+blocking Boto3 call releases the GIL, so the I/O waits overlap. (Not multiprocessing — there
+is no CPU work to split; not asyncio — Boto3 is synchronous.)
+
+The scan now fans out at two levels: a shared helper runs each regional check's per-region
+calls on a thread pool, and the runner runs the five checks concurrently — so the whole scan
+takes about as long as the single slowest check instead of the sum of all five. The one
+correctness subtlety: a Boto3 `Session` is **not** thread-safe for *creating* clients (a
+client, once built, *is* safe to call from many threads), so every client is built through one
+lock-guarded factory. Client creation is a fast local operation, so serializing it costs
+~nothing while the AWS calls themselves stay fully parallel.
+
+Measured on the live member account, back-to-back, with **byte-for-byte identical output** (69
+findings, score 100.0, 0 errors) — faster, not a faster wrong answer:
+
+| | Median scan time | Speedup |
+|---|---|---|
+| Serial (before) | 31.9 s | — |
+| Concurrent (after) | 1.8 s | **~18×** |
+
+This cut the dashboard's cold-load latency from ~30 s to under 2 s without changing a single
+check's evaluation logic.
+
 ## Backend — the API contract (Pydantic)
 
 The FastAPI backend uses **Pydantic models as the single source of truth for the API
