@@ -8,15 +8,16 @@ why we flag it rather than assuming it'll be fixed cheaply.
 
 from __future__ import annotations
 
+from typing import Any
+
 import boto3
 
 from detective.checks.base import (
-    BOTO_CONFIG,
     Finding,
     Severity,
     Status,
     account_id_of,
-    enabled_regions,
+    scan_regions,
 )
 
 CHECK_ID = "rds-encryption"
@@ -24,13 +25,17 @@ CHECK_ID = "rds-encryption"
 
 def run(session: boto3.Session) -> list[Finding]:
     account = account_id_of(session)
-    findings: list[Finding] = []
-    for region in enabled_regions(session):
-        rds = session.client("rds", region_name=region, config=BOTO_CONFIG)
+
+    def scan_region(region: str, rds: Any) -> list[Finding]:
+        found: list[Finding] = []
         for page in rds.get_paginator("describe_db_instances").paginate():
             for db in page["DBInstances"]:
-                findings.append(_evaluate_db(account, region, db))
-    return findings
+                found.append(_evaluate_db(account, region, db))
+        return found
+
+    # Regional: fan the per-region describe calls out across threads (see
+    # base.scan_regions) instead of walking ~17 regions one blocking call at a time.
+    return scan_regions(session, "rds", scan_region)
 
 
 def _evaluate_db(account: str, region: str, db: dict) -> Finding:

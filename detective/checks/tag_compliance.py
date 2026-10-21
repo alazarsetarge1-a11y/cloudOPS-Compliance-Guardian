@@ -21,15 +21,16 @@ alongside these Boto3 checks rather than relying on this one alone.
 
 from __future__ import annotations
 
+from typing import Any
+
 import boto3
 
 from detective.checks.base import (
-    BOTO_CONFIG,
     Finding,
     Severity,
     Status,
     account_id_of,
-    enabled_regions,
+    scan_regions,
 )
 
 CHECK_ID = "tag-compliance"
@@ -40,13 +41,17 @@ REQUIRED_TAGS = ("owner", "environment", "cost-center", "data-classification")
 
 def run(session: boto3.Session) -> list[Finding]:
     account = account_id_of(session)
-    findings: list[Finding] = []
-    for region in enabled_regions(session):
-        tagging = session.client("resourcegroupstaggingapi", region_name=region, config=BOTO_CONFIG)
+
+    def scan_region(region: str, tagging: Any) -> list[Finding]:
+        found: list[Finding] = []
         for page in tagging.get_paginator("get_resources").paginate():
             for resource in page["ResourceTagMappingList"]:
-                findings.append(_evaluate_resource(account, region, resource))
-    return findings
+                found.append(_evaluate_resource(account, region, resource))
+        return found
+
+    # Regional: fan the per-region get_resources calls out across threads (see
+    # base.scan_regions) instead of walking ~17 regions one blocking call at a time.
+    return scan_regions(session, "resourcegroupstaggingapi", scan_region)
 
 
 def _evaluate_resource(account: str, region: str, resource: dict) -> Finding:

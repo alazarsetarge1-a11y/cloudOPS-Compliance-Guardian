@@ -14,13 +14,13 @@ from __future__ import annotations
 import boto3
 from botocore.exceptions import ClientError
 
-from detective.checks.base import BOTO_CONFIG, Finding, Severity, Status, account_id_of
+from detective.checks.base import Finding, Severity, Status, account_id_of, make_client
 
 CHECK_ID = "iam-mfa"
 
 
 def run(session: boto3.Session) -> list[Finding]:
-    iam = session.client("iam", config=BOTO_CONFIG)
+    iam = make_client(session, "iam")
     account = account_id_of(session)
     findings = [_evaluate_root(iam, account)]
     for page in iam.get_paginator("list_users").paginate():

@@ -13,6 +13,9 @@ service layer.
 
 from __future__ import annotations
 
+import threading
+from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -25,6 +28,32 @@ from botocore.config import Config
 # automatically under throttling — essential when a check paginates over a large
 # account and AWS starts rate-limiting.
 BOTO_CONFIG = Config(retries={"max_attempts": 10, "mode": "adaptive"})
+
+# Guards boto3 client CREATION. A boto3.Session is not thread-safe for *building*
+# clients — credential resolution and the session's internal component cache can
+# race under concurrent creation — but a client, once built, is safe to call from
+# many threads. The scan fans checks (and regions within a check) out across
+# threads on one shared session, so every client is created through `make_client`,
+# serialized by this lock. Creation is a fast local operation (no network), so
+# holding the lock costs almost nothing while the AWS calls still run in parallel.
+_CLIENT_LOCK = threading.Lock()
+
+# Upper bound on concurrent per-region calls inside a single regional check. The
+# fan-out is I/O-bound (each worker just blocks on a socket), so more threads than
+# regions buys nothing; this only caps thread/connection churn on big accounts.
+_REGION_FANOUT = 16
+
+
+def make_client(session: boto3.Session, service: str, **kwargs: Any) -> Any:
+    """Build a boto3 client for `service`, serialized against concurrent creation.
+
+    Always applies BOTO_CONFIG. This is the ONE place clients are created, so the
+    Session-not-thread-safe-for-creation hazard is handled in exactly one spot
+    rather than being re-reasoned about in every check. Every check builds its
+    clients through here.
+    """
+    with _CLIENT_LOCK:
+        return session.client(service, config=BOTO_CONFIG, **kwargs)
 
 
 class Status(StrEnum):
@@ -80,12 +109,42 @@ class Finding:
 
 def account_id_of(session: boto3.Session) -> str:
     """Resolve the account id the session is operating in (one STS call)."""
-    return session.client("sts", config=BOTO_CONFIG).get_caller_identity()["Account"]
+    return make_client(session, "sts").get_caller_identity()["Account"]
 
 
 def enabled_regions(session: boto3.Session) -> list[str]:
-    """Regions enabled for this account. Regional checks must loop over these —
+    """Regions enabled for this account. Regional checks must cover all of these —
     a security group open to the world in eu-west-1 is just as exposed as one in
     us-east-1, and scanning a single region would silently miss it."""
-    ec2 = session.client("ec2", region_name="us-east-1", config=BOTO_CONFIG)
+    ec2 = make_client(session, "ec2", region_name="us-east-1")
     return [r["RegionName"] for r in ec2.describe_regions()["Regions"]]
+
+
+def scan_regions(
+    session: boto3.Session,
+    service: str,
+    scan_region: Callable[[str, Any], list[Finding]],
+) -> list[Finding]:
+    """Run `scan_region(region, client)` for every enabled region, concurrently.
+
+    Regional checks are network-bound: ~N sequential `describe_*` round-trips,
+    one per region, with the CPU idle waiting on each socket. A thread pool
+    overlaps those waits — a blocking boto3 call releases the GIL — turning N
+    serial round-trips into roughly one round-trip of wall time.
+
+    Clients are built up front via `make_client` (lock-guarded); the pool only
+    ever *calls* already-built clients, which is thread-safe. If a region's scan
+    raises, the exception propagates out of here, the check fails, and the runner
+    records one ERROR finding for the whole check — the same semantics as the old
+    serial loop, just faster.
+    """
+    regions = enabled_regions(session)
+    clients = {region: make_client(session, service, region_name=region) for region in regions}
+
+    findings: list[Finding] = []
+    with ThreadPoolExecutor(max_workers=min(_REGION_FANOUT, len(regions) or 1)) as pool:
+        # map() preserves submission order and re-raises a worker's exception when
+        # its result is consumed, so one failing region aborts the check as before.
+        for region_findings in pool.map(lambda item: scan_region(*item), clients.items()):
+            findings.extend(region_findings)
+    return findings
