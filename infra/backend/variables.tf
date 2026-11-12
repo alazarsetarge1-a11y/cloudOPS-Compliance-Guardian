@@ -35,7 +35,7 @@ variable "app_port" {
 variable "image_tag" {
   description = "ECR image tag to deploy (git SHA of the pushed image; this is the live one)."
   type        = string
-  default     = "aee7534"
+  default     = "a9da5ca"
 }
 
 variable "domain_name" {
